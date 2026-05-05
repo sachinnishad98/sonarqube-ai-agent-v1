@@ -1,0 +1,26 @@
+# ══════════════════════════════════════════════
+#  .gitignore — SonarAI
+#  Yeh file git mein honi chahiye
+# ══════════════════════════════════════════════
+
+# SECRETS — KABHI COMMIT MAT KARO
+.env
+.env.local
+.env.production
+*.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

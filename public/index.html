@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SonarAI • CRMnext DevOps Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root {
+    --bg: #060b14;
+    --surface: #0d1520;
+    --card: #111d2e;
+    --border: #1e3048;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+  .mono { font-family: 'Space Mono', monospace; }
+
+  /* Scanline effect */
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px);
+  }
+
+  /* Glow card */
+  .glow-card { position: relative; }
+  .glow-card::before {
+    content: ''; position: absolute; inset: -1px; border-radius: inherit;
+    background: linear-gradient(135deg, var(--accent)22, transparent 50%, var(--accent2)22);
+    z-index: -1;
+  }
+
+  /* Sidebar */
+  .sidebar { width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: all .2s; color: var(--muted); font-size: 14px; margin: 2px 8px; }
+  .nav-item:hover, .nav-item.active { background: rgba(0,212,255,.08); color: var(--accent); }
+  .nav-item.disabled { cursor: not-allowed; opacity: .4; }
+
+  /* Topbar */
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+
+  /* Cards */
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .repo-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; cursor: pointer; transition: all .25s; }
+  .repo-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,212,255,.1); }
+  .branch-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: all .2s; }
+  .branch-card:hover { border-color: var(--border); }
+
+  /* Buttons */
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #0099cc); color: #000; font-weight: 600; border: none; border-radius: 10px; padding: 10px 18px; cursor: pointer; font-size: 13px; transition: all .2s; font-family: 'DM Sans', sans-serif; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,.3); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .btn-purple { background: linear-gradient(135deg, var(--accent2), #5b21b6); color: #fff; }
+  .btn-purple:hover { box-shadow: 0 4px 20px rgba(124,58,237,.3); }
+  .btn-success { background: linear-gradient(135deg, var(--success), #059669); color: #fff; }
+  .btn-danger { background: linear-gradient(135deg, var(--danger), #dc2626); color: #fff; }
+
+  /* Badges */
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-family: 'Space Mono', monospace; }
+  .badge-critical { background: rgba(239,68,68,.2); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+  .badge-major    { background: rgba(245,158,11,.2); color: #fcd34d; border: 1px solid rgba(245,158,11,.3); }
+  .badge-minor    { background: rgba(59,130,246,.2); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+
+  /* Right panel */
+  .right-panel { width: 420px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .right-panel.hidden { display: none; }
+
+  /* Log terminal */
+  .terminal { background: #020810; border: 1px solid var(--border); border-radius: 12px; padding: 16px; height: 240px; overflow-y: auto; font-family: 'Space Mono', monospace; font-size: 11px; line-height: 1.7; }
+  .log-stdout { color: #94a3b8; }
+  .log-stderr { color: #f59e0b; }
+  .log-success { color: var(--success); }
+  .log-error { color: var(--danger); }
+  .log-step { color: var(--accent); font-weight: 700; }
+  .log-info { color: #818cf8; }
+
+  /* Score ring */
+  .score-ring { position: relative; width: 80px; height: 80px; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; font-family: 'Space Mono', monospace; }
+
+  /* Rating badge */
+  .rating { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; font-family: 'Space Mono', monospace; }
+  .rating-A { background: rgba(16,185,129,.2); color: #6ee7b7; }
+  .rating-B { background: rgba(59,130,246,.2); color: #93c5fd; }
+  .rating-C { background: rgba(245,158,11,.2); color: #fcd34d; }
+  .rating-D { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .rating-E { background: rgba(239,68,68,.25); color: #f87171; }
+
+  /* Pulse dot */
+  .pulse { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.3)} }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Animations */
+  .fade-in { animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Steps indicator */
+  .step-indicator { display: flex; align-items: center; gap: 0; }
+  .step { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .step-dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+  .step-line { width: 32px; height: 1px; background: var(--border); }
+  .step-pending  .step-dot { background: var(--border); color: var(--muted); }
+  .step-active   .step-dot { background: rgba(0,212,255,.2); color: var(--accent); border: 1px solid var(--accent); animation: pulseBorder 1.5s infinite; }
+  .step-done     .step-dot { background: rgba(16,185,129,.2); color: var(--success); }
+  .step-error    .step-dot { background: rgba(239,68,68,.2); color: var(--danger); }
+  @keyframes pulseBorder { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,.4)} 50%{box-shadow:0 0 0 4px rgba(0,212,255,0)} }
+
+  .main-content { flex: 1; overflow-y: auto; padding: 24px; }
+  input[type=text], input[type=search] { background: var(--card); border: 1px solid var(--border); border-radius: 10px; color: var(--text); padding: 8px 14px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="width:36px;height:36px;background:linear-gradient(135deg,#00d4ff,#7c3aed);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;font-family:'Space Mono',monospace;color:#000">SA</div>
+    <div>
+      <div style="font-weight:700;font-size:15px">SonarAI</div>
+      <div style="font-size:11px;color:var(--muted)">DevOps Code Quality Agent</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:20px">
+    <div id="conn-status" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+      <div class="pulse" id="conn-dot" style="background:var(--warning)"></div>
+      <span id="conn-text">Connecting...</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace" id="clock"></div>
+  </div>
+</div>
+
+<div style="display:flex;height:calc(100vh - 56px)">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div style="padding:16px 8px 8px">
+    <div style="padding:10px 16px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:12px;margin-bottom:16px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px">PROJECT</div>
+      <div style="font-weight:600;font-size:14px">CRMnext</div>
+      <div style="font-size:11px;color:var(--muted)">BusinessNext Platform</div>
+    </div>
+
+    <div style="font-size:10px;color:var(--muted);padding:4px 16px 8px;font-weight:600;letter-spacing:.05em">NAVIGATION</div>
+
+    <div class="nav-item active" onclick="showView('overview')" id="nav-overview"><i class="fa-solid fa-house" style="width:16px"></i> Overview</div>
+    <div class="nav-item" onclick="showView('repos')" id="nav-repos"><i class="fa-solid fa-code-branch" style="width:16px"></i> Repositories</div>
+    <div class="nav-item disabled"><i class="fa-solid fa-infinity" style="width:16px"></i> Pipelines <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
+    <div class="nav-item disabled"><i class="fa-solid fa-chart-line" style="width:16px"></i> Analytics <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
+    <div class="nav-item disabled"><i class="fa-solid fa-robot" style="width:16px"></i> AI Chat <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
+  </div>
+
+  <div style="margin-top:auto;padding:16px 8px;border-top:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);padding:4px 16px 8px;font-weight:600;letter-spacing:.05em">RECENT SCANS</div>
+    <div id="recent-scans" style="padding:0 8px;font-size:12px;color:var(--muted)">No scans yet</div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main-content" id="main-content">
+
+  <!-- OVERVIEW -->
+  <div id="view-overview" class="fade-in">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <h1 style="font-size:28px;font-weight:700">CRMnext Platform</h1>
+        <p style="color:var(--muted);margin-top:4px;font-size:14px">Azure DevOps → Code Review → SonarQube → Notify</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" onclick="showView('repos')"><i class="fa-solid fa-play" style="margin-right:6px"></i>Start Scan Flow</button>
+      </div>
+    </div>
+
+    <!-- PIPELINE STEPS -->
+    <div class="stat-card" style="margin-bottom:20px;padding:24px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em;margin-bottom:16px">SCAN PIPELINE</div>
+      <div style="display:flex;align-items:center;gap:0;overflow-x:auto">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="fa-brands fa-microsoft" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Select Repo</span>
+        </div>
+        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin:0 4px;min-width:20px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-code-branch" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Pick Branch</span>
+        </div>
+        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent2),#10b981);margin:0 4px;min-width:20px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;color:var(--success)"><i class="fa-solid fa-download" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Git Fetch+Pull</span>
+        </div>
+        <div style="flex:1;height:1px;background:linear-gradient(90deg,#10b981,#8b5cf6);margin:0 4px;min-width:20px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);display:flex;align-items:center;justify-content:center;color:#a78bfa"><i class="fa-solid fa-robot" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">AI Review</span>
+        </div>
+        <div style="flex:1;height:1px;background:linear-gradient(90deg,#8b5cf6,#f59e0b);margin:0 4px;min-width:20px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);display:flex;align-items:center;justify-content:center;color:var(--warning)"><i class="fa-solid fa-magnifying-glass-chart" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Sonar Scan</span>
+        </div>
+        <div style="flex:1;height:1px;background:linear-gradient(90deg,#f59e0b,#06b6d4);margin:0 4px;min-width:20px"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);display:flex;align-items:center;justify-content:center;color:#22d3ee"><i class="fa-solid fa-envelope-circle-check" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Report+Notify</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">REPOSITORIES</div>
+        <div style="font-size:32px;font-weight:700;font-family:'Space Mono',monospace" id="stat-repos">—</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AZURE ORG</div>
+        <div style="font-size:16px;font-weight:600;font-family:'Space Mono',monospace" id="display-org">—</div>
+        <div style="font-size:11px;color:var(--muted)" id="display-project">—</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">SONARQUBE</div>
+        <div style="font-size:13px;font-weight:600;color:var(--success)"><i class="fa-solid fa-circle-check"></i> Configured</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="display-sonar-url">—</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">LAST SCAN</div>
+        <div style="font-size:13px;font-weight:600" id="stat-last-scan">Never</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPOS VIEW -->
+  <div id="view-repos" class="fade-in hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <h2 style="font-size:22px;font-weight:700">Repositories</h2>
+        <p style="color:var(--muted);font-size:13px;margin-top:2px">Select a repository to view branches</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="repo-search" placeholder="🔍 Search repos..." oninput="filterRepos()" style="width:220px">
+        <button class="btn-primary" onclick="loadRepos()" id="refresh-repos-btn"><i class="fa-solid fa-arrows-rotate"></i></button>
+      </div>
+    </div>
+    <div id="repos-loading" style="text-align:center;padding:40px;color:var(--muted);display:none">
+      <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px"></i><br>Fetching from Azure DevOps...
+    </div>
+    <div id="repos-error" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:16px;margin-bottom:16px;font-size:13px;color:#fca5a5"></div>
+    <div id="repos-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px"></div>
+  </div>
+
+  <!-- BRANCHES VIEW -->
+  <div id="view-branches" class="fade-in hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="showView('repos')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--muted);cursor:pointer;font-size:12px"><i class="fa-solid fa-arrow-left"></i></button>
+        <div>
+          <h2 style="font-size:22px;font-weight:700" id="branch-repo-title">Branches</h2>
+          <p style="color:var(--muted);font-size:13px" id="branch-count-text"></p>
+        </div>
+      </div>
+      <input type="text" id="branch-search" placeholder="🔍 Search branches..." oninput="filterBranches()" style="width:220px">
+    </div>
+    <div id="branches-loading" style="text-align:center;padding:40px;color:var(--muted);display:none">
+      <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px"></i><br>Loading branches...
+    </div>
+    <div id="branches-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px"></div>
+  </div>
+
+</div><!-- /main-content -->
+
+<!-- RIGHT PANEL -->
+<div class="right-panel hidden" id="right-panel">
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface)">
+    <div>
+      <div style="font-weight:600;font-size:14px" id="panel-title">Operations</div>
+      <div style="font-size:11px;color:var(--muted)" id="panel-subtitle"></div>
+    </div>
+    <button onclick="closePanel()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;width:28px;height:28px;cursor:pointer;color:var(--muted);font-size:14px">×</button>
+  </div>
+
+  <!-- PANEL TABS -->
+  <div style="display:flex;border-bottom:1px solid var(--border)">
+    <button class="panel-tab active" onclick="switchTab('git')" id="tab-git" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text);border-bottom:2px solid var(--accent)"><i class="fa-brands fa-git-alt"></i> Git</button>
+    <button class="panel-tab" onclick="switchTab('review')" id="tab-review" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent"><i class="fa-solid fa-robot"></i> AI Review</button>
+    <button class="panel-tab" onclick="switchTab('scan')" id="tab-scan" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent"><i class="fa-solid fa-shield-halved"></i> Sonar</button>
+  </div>
+
+  <div style="flex:1;overflow-y:auto">
+
+    <!-- GIT TAB -->
+    <div id="tab-content-git" style="padding:16px">
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">ACTIONS</div>
+        <button class="btn-primary" onclick="doGitPull()" id="git-pull-btn" style="width:100%;margin-bottom:8px">
+          <i class="fa-solid fa-download"></i> Fetch + Checkout
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">OPERATION LOG</div>
+      <div class="terminal" id="git-log"></div>
+      <div id="git-result" style="display:none;margin-top:12px"></div>
+    </div>
+
+    <!-- REVIEW TAB -->
+    <div id="tab-content-review" style="padding:16px;display:none">
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">AI CODE REVIEW</div>
+        <button class="btn-primary btn-purple" onclick="doAiReview()" id="review-btn" style="width:100%;margin-bottom:8px">
+          <i class="fa-solid fa-robot"></i> Run AI Code Review
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">PROGRESS</div>
+      <div class="terminal" id="review-log" style="height:120px"></div>
+      <div id="review-result-section" style="display:none;margin-top:12px"></div>
+    </div>
+
+    <!-- SCAN TAB -->
+    <div id="tab-content-scan" style="padding:16px;display:none">
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">SONARQUBE SCAN</div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--muted)">Server</span><span id="scan-server-display" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent)">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Project Key</span><span id="scan-project-key" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis">—</span></div>
+        </div>
+        <button class="btn-primary btn-success" onclick="doSonarScan()" id="scan-btn" style="width:100%;margin-bottom:8px">
+          <i class="fa-solid fa-magnifying-glass-chart"></i> Run Sonar Scan
+        </button>
+      </div>
+
+      <!-- Scan steps -->
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:12px" id="scan-steps">
+        <div class="step step-pending" id="step-begin">
+          <div class="step-dot">1</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step step-pending" id="step-build">
+          <div class="step-dot">2</div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step step-pending" id="step-end">
+          <div class="step-dot">3</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-left:8px">Begin → Build → End</div>
+      </div>
+
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">SCAN LOG</div>
+      <div class="terminal" id="scan-log" style="height:180px"></div>
+      <div id="scan-result-section" style="display:none;margin-top:12px"></div>
+    </div>
+
+  </div><!-- /panel scroll -->
+</div><!-- /right-panel -->
+
+</div><!-- /flex -->
+
+<script>
+const socket = io();
+let currentRepo = '';
+let currentBranch = '';
+let allRepos = [];
+let allBranches = [];
+let scanStepState = [0, 0, 0];
+
+// ── LOAD CONFIG FROM SERVER (no hardcoded URLs in frontend) ──────────────────
+window._appConfig = {};
+fetch('/api/config')
+  .then(r => r.json())
+  .then(cfg => {
+    window._appConfig = cfg;
+    const sonarHost = cfg.sonarUrl ? new URL(cfg.sonarUrl).hostname : '—';
+    const el = document.getElementById('display-org');
+    if (el) el.textContent = cfg.org || '—';
+    const ep = document.getElementById('display-project');
+    if (ep) ep.textContent = cfg.project || '—';
+    const es = document.getElementById('display-sonar-url');
+    if (es) es.textContent = sonarHost;
+    const ss = document.getElementById('scan-server-display');
+    if (ss) ss.textContent = sonarHost;
+  })
+  .catch(() => {}); // silently fail — UI shows '—'
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN');
+}, 1000);
+
+// Socket connection
+socket.on('connect', () => {
+  document.getElementById('conn-dot').style.background = 'var(--success)';
+  document.getElementById('conn-text').textContent = 'Connected';
+  loadRepos();
+});
+socket.on('disconnect', () => {
+  document.getElementById('conn-dot').style.background = 'var(--danger)';
+  document.getElementById('conn-text').textContent = 'Disconnected';
+});
+
+// ── VIEW MANAGEMENT ─────────────────────────────────────────────────────────
+function showView(name) {
+  ['overview','repos','branches'].forEach(v => {
+    document.getElementById('view-' + v).classList.add('hidden');
+    document.getElementById('nav-' + v)?.classList.remove('active');
+  });
+  document.getElementById('view-' + name).classList.remove('hidden');
+  document.getElementById('nav-' + name)?.classList.add('active');
+  if (name === 'repos' && allRepos.length === 0) loadRepos();
+}
+
+function switchTab(tab) {
+  ['git','review','scan'].forEach(t => {
+    document.getElementById('tab-content-' + t).style.display = t === tab ? 'block' : 'none';
+    const tabEl = document.getElementById('tab-' + t);
+    if (t === tab) { tabEl.style.color = 'var(--text)'; tabEl.style.borderBottomColor = 'var(--accent)'; }
+    else { tabEl.style.color = 'var(--muted)'; tabEl.style.borderBottomColor = 'transparent'; }
+  });
+}
+
+function openPanel(repo, branch) {
+  currentRepo = repo;
+  currentBranch = branch;
+  document.getElementById('panel-title').textContent = branch;
+  document.getElementById('panel-subtitle').textContent = repo;
+  document.getElementById('scan-project-key').textContent = `Businessnext-${branch}-Branch`;
+  document.getElementById('right-panel').classList.remove('hidden');
+  document.getElementById('git-log').innerHTML = '';
+  document.getElementById('git-result').style.display = 'none';
+  document.getElementById('review-log').innerHTML = '';
+  document.getElementById('review-result-section').style.display = 'none';
+  document.getElementById('scan-log').innerHTML = '';
+  document.getElementById('scan-result-section').style.display = 'none';
+  resetScanSteps();
+  switchTab('git');
+}
+
+function closePanel() {
+  document.getElementById('right-panel').classList.add('hidden');
+}
+
+// ── REPOSITORIES ─────────────────────────────────────────────────────────────
+function loadRepos() {
+  document.getElementById('repos-loading').style.display = 'block';
+  document.getElementById('repos-grid').innerHTML = '';
+  document.getElementById('repos-error').style.display = 'none';
+  socket.emit('fetch-repositories');
+}
+
+socket.on('repositories', ({ success, repos, error }) => {
+  document.getElementById('repos-loading').style.display = 'none';
+  const errEl = document.getElementById('repos-error');
+  if (!success && error) {
+    errEl.style.display = 'block';
+    errEl.innerHTML = `⚠️ <b>Azure API unreachable</b> — showing fallback repos.<br><small style="opacity:.7">${escHtml(error)}</small>`;
+  } else {
+    errEl.style.display = 'none';
+  }
+  allRepos = repos || [];
+  document.getElementById('stat-repos').textContent = allRepos.length;
+  renderRepos(allRepos);
+});
+
+// Escape HTML to prevent XSS and broken onclick attrs
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderRepos(repos) {
+  const grid = document.getElementById('repos-grid');
+  if (!repos.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">No repositories found.</div>'; return; }
+  // Build full HTML at once — avoids repeated DOM reparse that freezes browser
+  grid.innerHTML = repos.map(r => `
+    <div class="repo-card" onclick="selectRepo('${escHtml(r.name)}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:linear-gradient(135deg,rgba(0,212,255,.2),rgba(124,58,237,.2));border:1px solid rgba(0,212,255,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--accent)"><i class="fa-solid fa-code-branch"></i></div>
+        <span style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace">${r.size ? (r.size/1024).toFixed(0)+'KB' : '—'}</span>
+      </div>
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px">${escHtml(r.name)}</div>
+      <div style="font-size:11px;color:var(--muted)"><i class="fa-solid fa-code-branch" style="margin-right:4px"></i>${escHtml(r.defaultBranch || 'main')}</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--accent)">Click to view branches →</div>
+    </div>`).join('');
+}
+
+function filterRepos() {
+  const q = document.getElementById('repo-search').value.toLowerCase();
+  renderRepos(allRepos.filter(r => r.name.toLowerCase().includes(q)));
+}
+
+// ── BRANCHES ─────────────────────────────────────────────────────────────────
+function selectRepo(repoName) {
+  currentRepo = repoName;
+  showView('branches');
+  document.getElementById('branch-repo-title').textContent = repoName;
+  document.getElementById('branch-count-text').textContent = 'Loading branches...';
+  document.getElementById('branches-loading').style.display = 'block';
+  document.getElementById('branches-grid').innerHTML = '';
+  socket.emit('fetch-branches', { repoName });
+}
+
+socket.on('branches', ({ success, branches, error }) => {
+  document.getElementById('branches-loading').style.display = 'none';
+  allBranches = branches || [];
+  const count = allBranches.length;
+  document.getElementById('branch-count-text').textContent =
+    success ? `${count} branches found` : `${count} branches (fallback — Azure unreachable: ${error})`;
+  renderBranches(allBranches);
+});
+
+function renderBranches(branches) {
+  const grid = document.getElementById('branches-grid');
+  if (!branches.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">No branches found.</div>'; return; }
+  // Build full HTML at once — fixes "Page Unresponsive" on 100+ branches
+  grid.innerHTML = branches.map(b => `
+    <div class="branch-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;word-break:break-all;flex:1;margin-right:8px">${escHtml(b.name)}</div>
+        <div style="font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);white-space:nowrap">${escHtml(b.commit)}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px"><i class="fa-regular fa-calendar" style="margin-right:4px"></i>${escHtml(b.date)}</div>
+      <button class="btn-primary" onclick="openPanel('${escHtml(currentRepo)}','${escHtml(b.name)}');event.stopPropagation()" style="width:100%;font-size:12px">
+        <i class="fa-solid fa-rocket" style="margin-right:6px"></i>Launch Scan Flow
+      </button>
+    </div>`).join('');
+}
+
+function filterBranches() {
+  const q = document.getElementById('branch-search').value.toLowerCase();
+  renderBranches(allBranches.filter(b => b.name.toLowerCase().includes(q)));
+}
+
+// ── GIT OPERATIONS ───────────────────────────────────────────────────────────
+function doGitPull() {
+  const btn = document.getElementById('git-pull-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
+  document.getElementById('git-log').innerHTML = '';
+  document.getElementById('git-result').style.display = 'none';
+  socket.emit('git-pull', { branch: currentBranch, repoName: currentRepo });
+}
+
+socket.on('pull-log', msg => {
+  const el  = document.getElementById('git-log');
+  const div = document.createElement('div');
+  div.innerHTML = msg; // controlled server HTML (bold/code tags only)
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+});
+
+socket.on('pull-result', result => {
+  const btn = document.getElementById('git-pull-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-download"></i> Fetch + Checkout';
+  const el = document.getElementById('git-result');
+  el.style.display = 'block';
+  if (result.success) {
+    el.innerHTML = `<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:12px;font-size:12px">
+      <div style="color:var(--success);font-weight:600;margin-bottom:8px">✅ Git operations complete</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;color:var(--muted)">
+        <div>Commit: <span style="color:var(--text);font-family:'Space Mono',monospace">${result.latestCommit || '—'}</span></div>
+        <div>Author: <span style="color:var(--text)">${result.author || '—'}</span></div>
+        <div style="grid-column:1/-1">Msg: <span style="color:var(--text)">${result.message || '—'}</span></div>
+      </div>
+      <button class="btn-primary" onclick="switchTab('review')" style="margin-top:10px;width:100%;font-size:12px"><i class="fa-solid fa-robot"></i> Next: AI Review →</button>
+    </div>`;
+  } else {
+    el.innerHTML = `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;font-size:12px;color:#fca5a5">❌ ${result.error}</div>`;
+  }
+});
+
+// ── AI REVIEW ────────────────────────────────────────────────────────────────
+function doAiReview() {
+  const btn = document.getElementById('review-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reviewing...';
+  document.getElementById('review-log').innerHTML = '';
+  document.getElementById('review-result-section').style.display = 'none';
+  socket.emit('ai-review', { branch: currentBranch, repoName: currentRepo });
+}
+
+socket.on('review-log', msg => {
+  const el  = document.getElementById('review-log');
+  const div = document.createElement('div');
+  div.className = 'log-info';
+  div.textContent = msg; // plain text only
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+});
+
+socket.on('review-result', ({ success, review, error }) => {
+  const btn = document.getElementById('review-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-robot"></i> Run AI Code Review';
+  const el = document.getElementById('review-result-section');
+  el.style.display = 'block';
+
+  if (!success) {
+    el.innerHTML = `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;font-size:12px;color:#fca5a5">❌ ${escHtml(error || 'Unknown error')}</div>`;
+    return;
+  }
+
+  // Safe defaults — prevents "undefined" showing in UI
+  const score    = (typeof review.score === 'number' && !isNaN(review.score)) ? review.score : null;
+  const summary  = review.summary || 'AI review complete.';
+  const issues   = Array.isArray(review.issues) ? review.issues : [];
+  const critical = issues.filter(i => i.severity === 'critical').length;
+  const major    = issues.filter(i => i.severity === 'major').length;
+  const minor    = issues.filter(i => i.severity === 'minor').length;
+
+  const scoreColor = score === null ? 'var(--muted)' : score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
+  const scoreDisplay = score !== null ? score : '—';
+
+  el.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:${scoreColor}">${scoreDisplay}</div>
+        <div style="font-size:10px;color:var(--muted)">/ 100</div>
+        <div style="flex:1;font-size:12px;color:var(--muted)">${escHtml(summary)}</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        ${critical > 0 ? `<span class="badge badge-critical">${critical} Critical</span>` : ''}
+        ${major    > 0 ? `<span class="badge badge-major">${major} Major</span>`           : ''}
+        ${minor    > 0 ? `<span class="badge badge-minor">${minor} Minor</span>`           : ''}
+        ${critical+major+minor === 0 ? `<span style="font-size:11px;color:var(--success)">✅ No issues found</span>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+        ${['security','maintainability','performance'].map(k => {
+          const rating = review[k]?.rating || 'B';
+          return `<div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center">
+            <div class="rating rating-${rating}" style="margin:0 auto 4px">${rating}</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:capitalize">${k.substring(0,7)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      ${issues.length > 0 ? `
+        <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px">TOP ISSUES</div>
+        ${issues.slice(0,3).map(i => `
+          <div style="background:var(--surface);border-radius:8px;padding:8px;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+              <span class="badge badge-${i.severity||'minor'}">${i.severity||'minor'}</span>
+              <span style="font-weight:600">${escHtml(i.title||'Issue')}</span>
+            </div>
+            <div style="color:var(--muted);font-size:11px">${escHtml(i.description||'')}</div>
+            ${i.fix ? `<div style="color:var(--success);font-size:11px;margin-top:4px">💡 ${escHtml(i.fix)}</div>` : ''}
+          </div>`).join('')}
+      ` : ''}
+      ${(review.recommendations||[]).length > 0 ? `
+        <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;margin-top:8px">RECOMMENDATIONS</div>
+        ${(review.recommendations||[]).slice(0,3).map(r => `<div style="font-size:11px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)">→ ${escHtml(r)}</div>`).join('')}
+      ` : ''}
+      <button class="btn-primary btn-success" onclick="switchTab('scan')" style="width:100%;margin-top:10px;font-size:12px"><i class="fa-solid fa-magnifying-glass-chart"></i> Next: Sonar Scan →</button>
+    </div>`;
+});
+
+// ── SONAR SCAN ───────────────────────────────────────────────────────────────
+function resetScanSteps() {
+  scanStepState = [0, 0, 0];
+  ['step-begin','step-build','step-end'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    el.className = 'step step-pending';
+    el.querySelector('.step-dot').textContent = i+1;
+  });
+}
+
+function setScanStep(index, state) {
+  const ids = ['step-begin','step-build','step-end'];
+  const el = document.getElementById(ids[index]);
+  el.className = 'step step-' + state;
+  if (state === 'done') el.querySelector('.step-dot').innerHTML = '<i class="fa-solid fa-check" style="font-size:8px"></i>';
+  if (state === 'error') el.querySelector('.step-dot').innerHTML = '<i class="fa-solid fa-x" style="font-size:8px"></i>';
+}
+
+function doSonarScan() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning...';
+  document.getElementById('scan-log').innerHTML = '';
+  document.getElementById('scan-result-section').style.display = 'none';
+  resetScanSteps();
+  setScanStep(0, 'active');
+  socket.emit('sonar-scan', { branch: currentBranch, repoName: currentRepo });
+}
+
+let scanStepTracker = 0;
+socket.on('scan-log', ({ type, line }) => {
+  const el  = document.getElementById('scan-log');
+  const div = document.createElement('div');
+  const cssClass = { stdout:'log-stdout', stderr:'log-stderr', success:'log-success', error:'log-error', step:'log-step', info:'log-info' }[type] || 'log-stdout';
+  div.className   = cssClass;
+  div.textContent = line; // textContent — no XSS possible
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+
+  // Auto-advance scan steps
+  if (line.includes('Begin complete')) { setScanStep(0,'done'); setScanStep(1,'active'); }
+  if (line.includes('Build complete')) { setScanStep(1,'done'); setScanStep(2,'active'); }
+  if (line.includes('End complete'))   { setScanStep(2,'done'); }
+  if (type === 'error') {
+    ['step-begin','step-build','step-end'].forEach((id,i) => {
+      if (document.getElementById(id).classList.contains('step-active')) setScanStep(i,'error');
+    });
+  }
+});
+
+socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, error }) => {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Run Sonar Scan';
+
+  const el = document.getElementById('scan-result-section');
+  el.style.display = 'block';
+
+  // Update recent scans sidebar
+  const rs = document.getElementById('recent-scans');
+  const now = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+  rs.innerHTML = `<div style="padding:6px 8px;border-radius:6px;background:${success?'rgba(16,185,129,.05)':'rgba(239,68,68,.05)'};border:1px solid ${success?'rgba(16,185,129,.2)':'rgba(239,68,68,.2)'};margin-bottom:4px">
+    <div style="color:${success?'var(--success)':'var(--danger)'};font-size:11px;font-weight:600">${success?'✅':'❌'} ${branch?.substring(0,20)}...</div>
+    <div style="color:var(--muted);font-size:10px">${now}</div>
+  </div>`;
+  document.getElementById('stat-last-scan').textContent = now;
+
+  if (!success) {
+    el.innerHTML = `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;font-size:12px;color:#fca5a5">
+      <div style="font-weight:600;margin-bottom:4px">❌ Scan Failed</div>
+      <div>${error}</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">A bug ticket has been created in Azure DevOps and an email notification has been sent.</div>
+    </div>`;
+    return;
+  }
+
+  const m = report?.metrics || {};
+  // sonarUrl comes from server config API — not hardcoded in frontend
+  const base      = window._appConfig?.sonarUrl || '';
+  const sonarLink = base ? `${base}/dashboard?id=${encodeURIComponent(projectKey||'')}` : '#';
+
+  el.innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:12px">
+      <div style="color:var(--success);font-weight:600;margin-bottom:10px;font-size:13px">✅ Scan Complete</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+        <div style="background:rgba(239,68,68,.1);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:#fca5a5">${m.bugs||0}</div>
+          <div style="font-size:10px;color:var(--muted)">Bugs</div>
+        </div>
+        <div style="background:rgba(245,158,11,.1);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:#fcd34d">${m.vulnerabilities||0}</div>
+          <div style="font-size:10px;color:var(--muted)">Vulns</div>
+        </div>
+        <div style="background:rgba(59,130,246,.1);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:#93c5fd">${m.code_smells||0}</div>
+          <div style="font-size:10px;color:var(--muted)">Smells</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+        <div style="text-align:center">
+          <div class="rating rating-${m.reliability_rating||'A'}" style="margin:0 auto 2px">${m.reliability_rating||'A'}</div>
+          <div style="font-size:10px;color:var(--muted)">Reliability</div>
+        </div>
+        <div style="text-align:center">
+          <div class="rating rating-${m.security_rating||'A'}" style="margin:0 auto 2px">${m.security_rating||'A'}</div>
+          <div style="font-size:10px;color:var(--muted)">Security</div>
+        </div>
+        <div style="text-align:center">
+          <div class="rating rating-${m.sqale_rating||'A'}" style="margin:0 auto 2px">${m.sqale_rating||'A'}</div>
+          <div style="font-size:10px;color:var(--muted)">Maintain.</div>
+        </div>
+      </div>
+      ${m.coverage ? `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--muted)">Coverage</span><span>${parseFloat(m.coverage).toFixed(1)}%</span></div><div style="height:4px;background:var(--border);border-radius:2px"><div style="height:100%;width:${m.coverage}%;background:var(--success);border-radius:2px"></div></div></div>` : ''}
+      <div style="display:flex;gap:6px">
+        <a href="${sonarLink}" target="_blank" style="flex:1;text-align:center;padding:8px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);border-radius:8px;color:var(--accent);text-decoration:none;font-size:11px"><i class="fa-solid fa-external-link"></i> View in SonarQube</a>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--success)"><i class="fa-solid fa-envelope"></i> Success email notification sent</div>
+    </div>`;
+});
+</script>
+</body>
+</html>
