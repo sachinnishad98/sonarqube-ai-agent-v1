@@ -730,43 +730,40 @@ sonar.token=${SONAR_TOKEN}`;
         fs.writeFileSync(propsPath, propsContent);
         log('info', '📝 Created sonar-project.properties');
 
-        // Try to run sonar-scanner CLI (with quick timeout)
+        // Try to run sonar-scanner CLI
         let scannerFound = false;
+        const scannerCmd = process.platform === 'win32' ? 'sonar-scanner.cmd' : 'sonar-scanner';
 
         try {
           log('info', '🔍 Checking for sonar-scanner CLI...');
 
-          // Quick check if sonar-scanner exists (2 second timeout)
-          await new Promise((resolve, reject) => {
-            const checkProcess = execFile('sonar-scanner', ['-v'], { timeout: 2000 }, (err, stdout) => {
-              if (err) {
-                reject(new Error('sonar-scanner not found'));
-              } else {
-                scannerFound = true;
-                resolve(stdout);
-              }
+          // Quick check if sonar-scanner exists
+          try {
+            await gitExec([scannerCmd, '-v'], repoPath).catch(() => {
+              throw new Error('Command test failed');
             });
-
-            // Force timeout after 2 seconds
-            setTimeout(() => {
-              try { checkProcess.kill(); } catch (_) {}
-              reject(new Error('timeout'));
-            }, 2000);
-          });
+            scannerFound = true;
+            log('success', '✅ sonar-scanner CLI found');
+          } catch (_) {
+            // Try alternative command
+            try {
+              await runCommand(`${scannerCmd} -v`, repoPath, socket, 'scan-log');
+              scannerFound = true;
+              log('success', '✅ sonar-scanner CLI found');
+            } catch (__) {
+              scannerFound = false;
+            }
+          }
 
           if (scannerFound) {
-            log('success', '✅ sonar-scanner CLI found');
-            log('info', '🔍 Running full JavaScript analysis...');
+            log('info', '🔍 Running full JavaScript analysis (this may take 1-2 minutes)...');
+            log('info', '📊 Analyzing files, calculating metrics, detecting issues...');
 
-            // Run the scan with timeout
-            await Promise.race([
-              runCommand('sonar-scanner', repoPath, socket, 'scan-log'),
-              new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Scan timeout after 5 minutes')), 300000)
-              )
-            ]);
+            // Run the scan
+            await runCommand(scannerCmd, repoPath, socket, 'scan-log');
 
             log('success', '✅ JavaScript scan completed successfully!');
+            log('success', '📊 Code analysis uploaded to SonarQube');
           }
 
         } catch (e) {
