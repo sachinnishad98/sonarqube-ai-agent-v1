@@ -624,8 +624,11 @@ ${codeSnippet}` }]
 
     const log = (type, line) => socket.emit('scan-log', { type, line });
 
-    // Project key: safe characters only
-    const projectKey = `${GITHUB_USERNAME}-${repoName}`.replace(/[^a-zA-Z0-9\-\.]/g, '_');
+    // Project key: safe characters only + unique timestamp
+    // Format: username-reponame-branch-YYYYMMDD-HHMMSS
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14); // YYYYMMDDHHmmss
+    const projectKey = `${GITHUB_USERNAME}-${repoName}-${branch}-${timestamp}`.replace(/[^a-zA-Z0-9\-\.]/g, '_');
+    const displayName = `${repoName} (${branch}) - ${new Date().toLocaleString('en-IN')}`;
 
     const repoPath = getRepoPath(repoName);
     if (!fs.existsSync(repoPath)) {
@@ -676,7 +679,7 @@ ${codeSnippet}` }]
         const beginCmd = [
           'dotnet sonarscanner begin',
           `/k:"${projectKey}"`,
-          `/n:"${repoName}"`,
+          `/n:"${displayName}"`,
           `/d:sonar.host.url="${SONAR_URL}"`,
           `/d:sonar.token="${SONAR_TOKEN}"`,
           `/d:sonar.branch.name="${branch}"`,
@@ -716,7 +719,7 @@ ${codeSnippet}` }]
 
         // Create sonar-project.properties file
         const propsContent = `sonar.projectKey=${projectKey}
-sonar.projectName=${repoName}
+sonar.projectName=${displayName}
 sonar.projectVersion=1.0
 sonar.sources=.
 sonar.sourceEncoding=UTF-8
