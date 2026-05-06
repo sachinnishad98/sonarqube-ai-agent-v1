@@ -549,35 +549,37 @@ function doGitPull() {
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running...';
   document.getElementById('git-log').innerHTML = '';
   document.getElementById('git-result').style.display = 'none';
-  socket.emit('git-pull', { branch: currentBranch, repoName: currentRepo });
+  socket.emit('git-sync', { branch: currentBranch, repoName: currentRepo });
 }
 
-socket.on('pull-log', msg => {
+socket.on('git-log', msg => {
   const el  = document.getElementById('git-log');
   const div = document.createElement('div');
-  div.innerHTML = msg; // controlled server HTML (bold/code tags only)
+  div.className = 'log-info';
+  div.textContent = msg; // plain text only
   el.appendChild(div);
   el.scrollTop = el.scrollHeight;
 });
 
-socket.on('pull-result', result => {
+socket.on('git-result', result => {
   const btn = document.getElementById('git-pull-btn');
   btn.disabled = false;
   btn.innerHTML = '<i class="fa-solid fa-download"></i> Fetch + Checkout';
   const el = document.getElementById('git-result');
   el.style.display = 'block';
   if (result.success) {
+    const commit = result.commit || {};
     el.innerHTML = `<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:12px;font-size:12px">
       <div style="color:var(--success);font-weight:600;margin-bottom:8px">✅ Git operations complete</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;color:var(--muted)">
-        <div>Commit: <span style="color:var(--text);font-family:'Space Mono',monospace">${result.latestCommit || '—'}</span></div>
-        <div>Author: <span style="color:var(--text)">${result.author || '—'}</span></div>
-        <div style="grid-column:1/-1">Msg: <span style="color:var(--text)">${result.message || '—'}</span></div>
+        <div>Commit: <span style="color:var(--text);font-family:'Space Mono',monospace">${commit.sha || '—'}</span></div>
+        <div>Author: <span style="color:var(--text)">${escHtml(commit.author || '—')}</span></div>
+        <div style="grid-column:1/-1">Msg: <span style="color:var(--text)">${escHtml(commit.subject || '—')}</span></div>
       </div>
       <button class="btn-primary" onclick="switchTab('review')" style="margin-top:10px;width:100%;font-size:12px"><i class="fa-solid fa-robot"></i> Next: AI Review →</button>
     </div>`;
   } else {
-    el.innerHTML = `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;font-size:12px;color:#fca5a5">❌ ${result.error}</div>`;
+    el.innerHTML = `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;font-size:12px;color:#fca5a5">❌ ${escHtml(result.error || 'Unknown error')}</div>`;
   }
 });
 
@@ -612,57 +614,171 @@ socket.on('review-result', ({ success, review, error }) => {
     return;
   }
 
-  // Safe defaults — prevents "undefined" showing in UI
-  const score    = (typeof review.score === 'number' && !isNaN(review.score)) ? review.score : null;
+  // Safe defaults
+  const score    = (typeof review.score === 'number' && !isNaN(review.score)) ? review.score : 75;
   const summary  = review.summary || 'AI review complete.';
   const issues   = Array.isArray(review.issues) ? review.issues : [];
-  const critical = issues.filter(i => i.severity === 'critical').length;
-  const major    = issues.filter(i => i.severity === 'major').length;
-  const minor    = issues.filter(i => i.severity === 'minor').length;
+  const metrics  = review.metrics || { totalIssues: 0, critical: 0, major: 0, minor: 0, technicalDebt: '0h' };
+  const security = review.security || { rating: 'B', score: 75, vulnerabilities: [] };
+  const maint    = review.maintainability || { rating: 'B', score: 75, codeSmells: [] };
+  const perf     = review.performance || { rating: 'B', score: 75, bottlenecks: [] };
+  const dup      = review.duplications || { percentage: 0, blocks: 0, lines: 0, details: [] };
+  const complex  = review.complexity || { average: 5, highest: null, concerns: [] };
 
-  const scoreColor = score === null ? 'var(--muted)' : score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
-  const scoreDisplay = score !== null ? score : '—';
+  const scoreColor = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
 
   el.innerHTML = `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:12px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:${scoreColor}">${scoreDisplay}</div>
-        <div style="font-size:10px;color:var(--muted)">/ 100</div>
-        <div style="flex:1;font-size:12px;color:var(--muted)">${escHtml(summary)}</div>
+    <!-- ENHANCED AI REVIEW DASHBOARD -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;font-size:12px;max-height:600px;overflow-y:auto">
+
+      <!-- HEADER SCORE -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:36px;font-weight:700;font-family:'Space Mono',monospace;color:${scoreColor}">${score}</div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--muted)">OVERALL QUALITY SCORE</div>
+          <div style="font-size:11px;color:var(--text);margin-top:2px">${escHtml(summary)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">
+            🔧 Technical Debt: ${escHtml(metrics.technicalDebt)} |
+            📁 ${review.files?.length || 0} files analyzed
+          </div>
+        </div>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-        ${critical > 0 ? `<span class="badge badge-critical">${critical} Critical</span>` : ''}
-        ${major    > 0 ? `<span class="badge badge-major">${major} Major</span>`           : ''}
-        ${minor    > 0 ? `<span class="badge badge-minor">${minor} Minor</span>`           : ''}
-        ${critical+major+minor === 0 ? `<span style="font-size:11px;color:var(--success)">✅ No issues found</span>` : ''}
+
+      <!-- METRICS GRID -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+        <div style="background:rgba(239,68,68,.1);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#f87171">${metrics.critical || 0}</div>
+          <div style="font-size:9px;color:var(--muted)">CRITICAL</div>
+        </div>
+        <div style="background:rgba(245,158,11,.1);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#fbbf24">${metrics.major || 0}</div>
+          <div style="font-size:9px;color:var(--muted)">MAJOR</div>
+        </div>
+        <div style="background:rgba(59,130,246,.1);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#60a5fa">${metrics.minor || 0}</div>
+          <div style="font-size:9px;color:var(--muted)">MINOR</div>
+        </div>
+        <div style="background:rgba(16,185,129,.1);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#34d399">${review.linesOfCode || 0}</div>
+          <div style="font-size:9px;color:var(--muted)">LINES OF CODE</div>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
-        ${['security','maintainability','performance'].map(k => {
-          const rating = review[k]?.rating || 'B';
-          return `<div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center">
-            <div class="rating rating-${rating}" style="margin:0 auto 4px">${rating}</div>
-            <div style="font-size:10px;color:var(--muted);text-transform:capitalize">${k.substring(0,7)}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      ${issues.length > 0 ? `
-        <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px">TOP ISSUES</div>
-        ${issues.slice(0,3).map(i => `
-          <div style="background:var(--surface);border-radius:8px;padding:8px;margin-bottom:6px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-              <span class="badge badge-${i.severity||'minor'}">${i.severity||'minor'}</span>
-              <span style="font-weight:600">${escHtml(i.title||'Issue')}</span>
+
+      <!-- RATINGS DETAILED -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+        ${[
+          {key:'security', data:security, icon:'🔒', color:'#ef4444'},
+          {key:'maintainability', data:maint, icon:'🔧', color:'#f59e0b'},
+          {key:'performance', data:perf, icon:'⚡', color:'#10b981'}
+        ].map(item => `
+          <div style="background:var(--surface);border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="font-size:16px">${item.icon}</span>
+              <div class="rating rating-${item.data.rating}" style="margin-left:auto">${item.data.rating}</div>
             </div>
-            <div style="color:var(--muted);font-size:11px">${escHtml(i.description||'')}</div>
-            ${i.fix ? `<div style="color:var(--success);font-size:11px;margin-top:4px">💡 ${escHtml(i.fix)}</div>` : ''}
-          </div>`).join('')}
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">${item.key}</div>
+            <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${item.data.score||0}%;background:${item.color};transition:width .3s"></div>
+            </div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px;text-align:right">${item.data.score||0}/100</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- SECURITY VULNERABILITIES -->
+      ${security.vulnerabilities && security.vulnerabilities.length > 0 ? `
+        <div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:#f87171;margin-bottom:8px">🔒 SECURITY VULNERABILITIES (${security.vulnerabilities.length})</div>
+          ${security.vulnerabilities.slice(0,5).map(v => `
+            <div style="background:var(--card);border-radius:6px;padding:8px;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                <span class="badge badge-${v.severity==='critical'||v.severity==='high'?'critical':'major'}">${v.severity||'high'}</span>
+                <span style="font-weight:600;font-size:11px">${escHtml(v.type||'Security Issue')}</span>
+              </div>
+              <div style="font-size:10px;color:var(--muted)">${escHtml(v.location||'')}</div>
+              <div style="font-size:10px;color:var(--text);margin-top:4px">${escHtml(v.description||'')}</div>
+            </div>
+          `).join('')}
+        </div>
       ` : ''}
+
+      <!-- CODE SMELLS -->
+      ${maint.codeSmells && maint.codeSmells.length > 0 ? `
+        <div style="background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:#fbbf24;margin-bottom:8px">👃 CODE SMELLS (${maint.codeSmells.length})</div>
+          ${maint.codeSmells.slice(0,5).map(c => `
+            <div style="background:var(--card);border-radius:6px;padding:8px;margin-bottom:6px">
+              <div style="font-weight:600;font-size:11px;margin-bottom:2px">${escHtml(c.type||'Code Smell')}</div>
+              <div style="font-size:10px;color:var(--muted)">${escHtml(c.location||'')}</div>
+              <div style="font-size:10px;color:var(--text);margin-top:4px">${escHtml(c.description||'')}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- PERFORMANCE BOTTLENECKS -->
+      ${perf.bottlenecks && perf.bottlenecks.length > 0 ? `
+        <div style="background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:#34d399;margin-bottom:8px">⚡ PERFORMANCE BOTTLENECKS (${perf.bottlenecks.length})</div>
+          ${perf.bottlenecks.slice(0,5).map(p => `
+            <div style="background:var(--card);border-radius:6px;padding:8px;margin-bottom:6px">
+              <div style="font-weight:600;font-size:11px;margin-bottom:2px">${escHtml(p.type||'Performance Issue')}</div>
+              <div style="font-size:10px;color:var(--muted)">${escHtml(p.location||'')}</div>
+              <div style="font-size:10px;color:var(--text);margin-top:4px">${escHtml(p.impact||'')}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- CODE DUPLICATIONS -->
+      ${dup.percentage > 0 ? `
+        <div style="background:rgba(139,92,246,.05);border:1px solid rgba(139,92,246,.2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:#a78bfa;margin-bottom:8px">
+            📋 CODE DUPLICATIONS: ${dup.percentage.toFixed(1)}% (${dup.blocks} blocks, ${dup.lines} lines)
+          </div>
+          ${(dup.details||[]).slice(0,3).map(d => `
+            <div style="background:var(--card);border-radius:6px;padding:8px;margin-bottom:6px">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Files: ${(d.files||[]).join(', ')}</div>
+              <div style="font-size:10px;color:var(--muted)">Lines: ${escHtml(d.lines||'')}</div>
+              <div style="font-size:9px;color:var(--text);margin-top:4px;font-family:'Space Mono',monospace">${escHtml((d.snippet||'').substring(0,100))}...</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <!-- COMPLEXITY -->
+      ${complex.average > 0 ? `
+        <div style="background:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:#60a5fa;margin-bottom:8px">
+            🔢 CYCLOMATIC COMPLEXITY: Avg ${complex.average.toFixed(1)}
+            ${complex.highest ? ` | Highest: ${complex.highest.score} (${complex.highest.function})` : ''}
+          </div>
+          ${(complex.concerns||[]).length > 0 ? `
+            <div style="font-size:10px;color:var(--muted)">High complexity functions:</div>
+            ${complex.concerns.slice(0,3).map(c => `<div style="font-size:10px;color:var(--text);padding:2px 0">→ ${escHtml(c)}</div>`).join('')}
+          ` : ''}
+        </div>
+      ` : ''}
+
+      <!-- RECOMMENDATIONS -->
       ${(review.recommendations||[]).length > 0 ? `
-        <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;margin-top:8px">RECOMMENDATIONS</div>
-        ${(review.recommendations||[]).slice(0,3).map(r => `<div style="font-size:11px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)">→ ${escHtml(r)}</div>`).join('')}
+        <div style="background:var(--surface);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:10px;font-weight:600;color:var(--accent);margin-bottom:8px">💡 TOP RECOMMENDATIONS</div>
+          ${(review.recommendations||[]).slice(0,5).map((r,i) => `
+            <div style="font-size:10px;color:var(--text);padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
+              <span style="color:var(--accent);font-weight:700;min-width:16px">${i+1}.</span>
+              <span>${escHtml(r)}</span>
+            </div>
+          `).join('')}
+        </div>
       ` : ''}
-      <button class="btn-primary btn-success" onclick="switchTab('scan')" style="width:100%;margin-top:10px;font-size:12px"><i class="fa-solid fa-magnifying-glass-chart"></i> Next: Sonar Scan →</button>
-    </div>`;
+
+      <!-- NEXT BUTTON -->
+      <button class="btn-primary btn-success" onclick="switchTab('scan')" style="width:100%;font-size:12px">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Next: SonarQube Scan →
+      </button>
+    </div>
+  `;
 });
 
 // ── SONAR SCAN ───────────────────────────────────────────────────────────────

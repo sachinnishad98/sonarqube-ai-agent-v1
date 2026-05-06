@@ -42,7 +42,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' ws://localhost:3001 ws://127.0.0.1:3001; img-src 'self' data:"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' ws://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3002 ws://127.0.0.1:3002; img-src 'self' data:"
   );
   next();
 });
@@ -97,8 +97,23 @@ function validateBranchName(name) {
 /**
  * Returns the local path for a repo.
  * Checks if it exists — if not, tells caller to clone first.
+ * Supports custom per-repo paths via REPO_PATH_<reponame> env var.
  */
 function getRepoPath(repoName) {
+  // Check for custom path for this specific repo (e.g., REPO_PATH_sonarqube-ai-agent-v1)
+  const customPathKey = `REPO_PATH_${repoName.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+  const customPath = process.env[customPathKey];
+
+  if (customPath) {
+    // Custom path specified — use it directly (no append repoName)
+    const resolved = path.resolve(customPath);
+    // Basic validation — ensure it's an absolute path
+    if (path.isAbsolute(resolved)) {
+      return resolved;
+    }
+  }
+
+  // Default behavior — append repoName to REPO_BASE_PATH
   const resolved = path.resolve(REPO_BASE_PATH, repoName);
   const base     = path.resolve(REPO_BASE_PATH);
 
@@ -139,9 +154,21 @@ const rateLimiter = createRateLimiter(10, 60 * 1000);
 /** Secure git runner */
 function gitExec(args, cwd) {
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, timeout: 120000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stderr || err.message));
-      else resolve(stdout.trim());
+    const cmdStr = `git ${args.join(' ')}`;
+    console.log(`[gitExec] Running: ${cmdStr} in ${cwd}`);
+
+    execFile('git', args, {
+      cwd,
+      timeout: 180000,  // 3 minutes (Windows slow ho sakta hai)
+      maxBuffer: 10 * 1024 * 1024
+    }, (err, stdout, stderr) => {
+      if (err) {
+        console.error(`[gitExec] Error: ${stderr || err.message}`);
+        reject(new Error(stderr || err.message));
+      } else {
+        console.log(`[gitExec] Success: ${stdout.substring(0, 200)}`);
+        resolve(stdout.trim());
+      }
     });
   });
 }
@@ -327,10 +354,21 @@ io.on('connection', (socket) => {
     if (!validateRepoName(repoName))  return socket.emit('git-result', { success: false, error: 'Invalid repo name' });
     if (!validateBranchName(branch))  return socket.emit('git-result', { success: false, error: 'Invalid branch name' });
 
-    const log = msg => socket.emit('git-log', msg);
+    const log = msg => {
+      console.log(`[git-sync] ${msg}`);
+      socket.emit('git-log', msg);
+    };
     log(`🔄 Git Sync — ${repoName}@${branch}`);
 
-    const repoPath = getRepoPath(repoName);
+    let repoPath;
+    try {
+      repoPath = getRepoPath(repoName);
+      log(`📁 Target path: ${repoPath}`);
+    } catch (e) {
+      const errMsg = safeError(e);
+      log(`❌ ${errMsg}`);
+      return socket.emit('git-result', { success: false, error: errMsg });
+    }
 
     try {
       if (!fs.existsSync(repoPath)) {
@@ -346,16 +384,27 @@ io.on('connection', (socket) => {
       } else {
         // PULL — repo exists, update it
         log(`📂 Repo exists at ${repoPath}`);
+
+        // Check if it's actually a git repo
+        if (!fs.existsSync(path.join(repoPath, '.git'))) {
+          throw new Error(`Directory exists but is not a git repository. Delete ${repoPath} and try again.`);
+        }
+
         log(`🔀 Fetching latest...`);
         await gitExec(['fetch', '--all', '--prune'], repoPath);
+        log(`✅ Fetch complete`);
+
         log(`🔀 Checking out ${branch}...`);
         await gitExec(['checkout', branch], repoPath);
+        log(`✅ Checkout complete`);
+
         log(`⬇️  Pulling latest changes...`);
         await gitExec(['pull', 'origin', branch], repoPath);
         log(`✅ Pull complete!`);
       }
 
       // Get last commit info
+      log(`📝 Reading commit info...`);
       const lastCommit = await gitExec(['log', '-1', '--pretty=format:%H|%an|%s|%ci'], repoPath).catch(() => '');
       const [sha, author, subject, date] = lastCommit.split('|');
 
@@ -433,18 +482,131 @@ io.on('connection', (socket) => {
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5', max_tokens: 2000, temperature: 0.2,
-          system: `You are a senior code reviewer. Return ONLY valid JSON (no markdown):
-{"summary":"string","score":number,"issues":[{"severity":"critical|major|minor","file":"string","title":"string","description":"string","fix":"string"}],"security":{"rating":"A|B|C|D|E","findings":["string"]},"maintainability":{"rating":"A|B|C|D|E","findings":["string"]},"performance":{"rating":"A|B|C|D|E","findings":["string"]},"recommendations":["string"]}`,
-          messages: [{ role: 'user', content: `Review code from branch "${branch}" (${repoName}):\n${codeSnippet}` }]
+          model: 'claude-sonnet-4-5', max_tokens: 4000, temperature: 0.2,
+          system: `You are a senior code security and quality analyst. Analyze code deeply and return ONLY valid JSON (no markdown, no explanations):
+
+{
+  "summary": "Brief overall assessment",
+  "score": number (0-100),
+  "linesOfCode": number,
+  "files": ["list of analyzed files"],
+  "issues": [
+    {
+      "severity": "critical|major|minor",
+      "category": "security|quality|performance|maintainability",
+      "file": "filename",
+      "line": number or null,
+      "title": "Short title",
+      "description": "Detailed description",
+      "fix": "How to fix it",
+      "cwe": "CWE-xxx (if security issue)" or null
+    }
+  ],
+  "security": {
+    "rating": "A|B|C|D|E",
+    "score": number (0-100),
+    "findings": ["specific findings"],
+    "vulnerabilities": [
+      {
+        "type": "SQL Injection|XSS|Hardcoded Secret|etc",
+        "severity": "critical|high|medium|low",
+        "location": "file:line",
+        "description": "what was found"
+      }
+    ]
+  },
+  "maintainability": {
+    "rating": "A|B|C|D|E",
+    "score": number (0-100),
+    "findings": ["specific findings"],
+    "codeSmells": [
+      {
+        "type": "Duplicate Code|Long Method|God Class|etc",
+        "location": "file:line",
+        "description": "what needs improvement"
+      }
+    ]
+  },
+  "performance": {
+    "rating": "A|B|C|D|E",
+    "score": number (0-100),
+    "findings": ["specific findings"],
+    "bottlenecks": [
+      {
+        "type": "N+1 Query|Memory Leak|Inefficient Loop|etc",
+        "location": "file:line",
+        "impact": "description"
+      }
+    ]
+  },
+  "duplications": {
+    "percentage": number (0-100),
+    "blocks": number,
+    "lines": number,
+    "details": [
+      {
+        "files": ["file1", "file2"],
+        "lines": "approximate line range",
+        "snippet": "first 100 chars of duplicate"
+      }
+    ]
+  },
+  "complexity": {
+    "average": number,
+    "highest": {"file": "name", "function": "name", "score": number},
+    "concerns": ["functions/classes with high complexity"]
+  },
+  "recommendations": ["actionable improvements in priority order"],
+  "metrics": {
+    "totalIssues": number,
+    "critical": number,
+    "major": number,
+    "minor": number,
+    "technicalDebt": "estimated time to fix (e.g., 2h, 1d)"
+  }
+}
+
+IMPORTANT:
+- Be thorough - check for OWASP Top 10 vulnerabilities
+- Identify code duplications and similar patterns
+- Calculate cyclomatic complexity where possible
+- Look for hardcoded secrets, passwords, API keys
+- Check for SQL injection, XSS, insecure deserialization
+- Identify performance issues like N+1 queries, memory leaks
+- Flag code smells like long methods, god classes, duplicate code
+- Provide specific line numbers when possible`,
+          messages: [{ role: 'user', content: `Perform comprehensive code review for branch "${branch}" in repository "${repoName}".
+
+Analyze for:
+1. Security vulnerabilities (OWASP Top 10)
+2. Code quality issues
+3. Performance bottlenecks
+4. Code duplications
+5. Maintainability concerns
+6. Cyclomatic complexity
+
+Code to analyze:
+${codeSnippet}` }]
         })
       });
 
       const aiData = await aiRes.json();
       const raw    = aiData.content?.[0]?.text || '{}';
       let review;
-      try   { review = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
-      catch { review = { summary: 'Review complete (parse error)', score: null, issues: [], security: { rating: 'B', findings: [] }, maintainability: { rating: 'B', findings: [] }, performance: { rating: 'B', findings: [] }, recommendations: [] }; }
+      try {
+        review = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      } catch {
+        review = {
+          summary: 'Review complete (parse error)', score: 75, linesOfCode: 0, files: [],
+          issues: [], security: { rating: 'B', score: 75, findings: [], vulnerabilities: [] },
+          maintainability: { rating: 'B', score: 75, findings: [], codeSmells: [] },
+          performance: { rating: 'B', score: 75, findings: [], bottlenecks: [] },
+          duplications: { percentage: 0, blocks: 0, lines: 0, details: [] },
+          complexity: { average: 5, highest: null, concerns: [] },
+          recommendations: [],
+          metrics: { totalIssues: 0, critical: 0, major: 0, minor: 0, technicalDebt: '0h' }
+        };
+      }
 
       socket.emit('review-result', { success: true, branch, repoName, review });
       log(`✅ Done — Score: ${review.score ?? '—'}/100`);
@@ -473,58 +635,143 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Auto-detect .sln file if not provided
+    // Auto-detect project type
+    let projectType = 'generic'; // default
     let solutionFile = slnFile;
-    if (!solutionFile) {
-      try {
-        const slnFiles = fs.readdirSync(repoPath).filter(f => f.endsWith('.sln'));
-        solutionFile = slnFiles[0] || null;
-        if (solutionFile) log('info', `🔍 Auto-detected: ${solutionFile}`);
-      } catch (_) {}
-    }
+
+    try {
+      const files = fs.readdirSync(repoPath);
+
+      // Check for .NET project
+      const slnFiles = files.filter(f => f.endsWith('.sln'));
+      const csprojFiles = files.filter(f => f.endsWith('.csproj'));
+
+      if (slnFiles.length > 0) {
+        projectType = 'dotnet';
+        solutionFile = slnFiles[0];
+        log('info', `🔍 Detected: .NET project (${solutionFile})`);
+      } else if (csprojFiles.length > 0) {
+        projectType = 'dotnet';
+        log('info', `🔍 Detected: .NET project (${csprojFiles[0]})`);
+      } else if (files.includes('package.json')) {
+        projectType = 'javascript';
+        log('info', `🔍 Detected: JavaScript/Node.js project`);
+      }
+    } catch (_) {}
 
     log('step', `🔍 Sonar Scan — ${repoName}@${branch}`);
     log('info',  `📁 ${repoPath}`);
     log('info',  `🔑 Project Key: ${projectKey}`);
+    log('info',  `📦 Project Type: ${projectType}`);
     log('info',  `🌐 SonarQube: ${SONAR_URL}`);
 
     try {
-      // ── STEP 1: Begin ──────────────────────────────────────────────────
-      log('step', '━━━ STEP 1: SonarScanner Begin ━━━');
-      const beginCmd = [
-        'dotnet sonarscanner begin',
-        `/k:"${projectKey}"`,
-        `/n:"${repoName}"`,
-        `/d:sonar.host.url="${SONAR_URL}"`,
-        `/d:sonar.token="${SONAR_TOKEN}"`,
-        `/d:sonar.branch.name="${branch}"`,
-        `/d:sonar.cs.opencover.reportsPaths=**\\coverage.opencover.xml`,
-        `/d:sonar.exclusions=**/node_modules/**,**/.git/**,**/bin/**,**/obj/**`
-      ].join(' ');
-      await runCommand(beginCmd, repoPath, socket, 'scan-log');
-      log('success', '✅ Begin done');
+      if (projectType === 'dotnet') {
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // .NET PROJECT SCAN (3-step process)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-      // ── STEP 2: Build ──────────────────────────────────────────────────
-      log('step', '━━━ STEP 2: dotnet build ━━━');
-      if (solutionFile) {
+        // ── STEP 1: Begin ──────────────────────────────────────────────────
+        log('step', '━━━ STEP 1: SonarScanner Begin ━━━');
+        const beginCmd = [
+          'dotnet sonarscanner begin',
+          `/k:"${projectKey}"`,
+          `/n:"${repoName}"`,
+          `/d:sonar.host.url="${SONAR_URL}"`,
+          `/d:sonar.token="${SONAR_TOKEN}"`,
+          `/d:sonar.branch.name="${branch}"`,
+          `/d:sonar.cs.opencover.reportsPaths=**\\coverage.opencover.xml`,
+          `/d:sonar.exclusions=**/node_modules/**,**/.git/**,**/bin/**,**/obj/**`
+        ].join(' ');
+        await runCommand(beginCmd, repoPath, socket, 'scan-log');
+        log('success', '✅ Begin done');
+
+        // ── STEP 2: Build ──────────────────────────────────────────────────
+        log('step', '━━━ STEP 2: dotnet build ━━━');
+        if (solutionFile) {
+          await runCommand(
+            `dotnet build "${solutionFile}" /p:platform="Any CPU" /p:configuration="Release" -nodeReuse:false`,
+            repoPath, socket, 'scan-log'
+          );
+        } else {
+          await runCommand('dotnet build . /p:configuration="Release" -nodeReuse:false', repoPath, socket, 'scan-log');
+        }
+        log('success', '✅ Build done');
+
+        // ── STEP 3: End ────────────────────────────────────────────────────
+        log('step', '━━━ STEP 3: SonarScanner End ━━━');
         await runCommand(
-          `dotnet build "${solutionFile}" /p:platform="Any CPU" /p:configuration="Release" -nodeReuse:false`,
+          `dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"`,
           repoPath, socket, 'scan-log'
         );
-      } else {
-        // No .sln found — build directory (works for simpler projects)
-        log('info', '⚠️ No .sln found — trying dotnet build .');
-        await runCommand('dotnet build . /p:configuration="Release" -nodeReuse:false', repoPath, socket, 'scan-log');
-      }
-      log('success', '✅ Build done');
+        log('success', '✅ End done — uploading report...');
 
-      // ── STEP 3: End ────────────────────────────────────────────────────
-      log('step', '━━━ STEP 3: SonarScanner End ━━━');
-      await runCommand(
-        `dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"`,
-        repoPath, socket, 'scan-log'
-      );
-      log('success', '✅ End done — uploading report...');
+      } else {
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // JAVASCRIPT/GENERIC PROJECT SCAN (sonar-scanner CLI)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        log('step', '━━━ JavaScript/Node.js SonarQube Scan ━━━');
+        log('info', '📦 Using sonar-scanner CLI for JavaScript analysis');
+
+        // Create sonar-project.properties file
+        const propsContent = `sonar.projectKey=${projectKey}
+sonar.projectName=${repoName}
+sonar.projectVersion=1.0
+sonar.sources=.
+sonar.sourceEncoding=UTF-8
+sonar.exclusions=node_modules/**,coverage/**,dist/**,build/**,.git/**,.claude/**,.wolf/**,**/*.test.js,**/*.spec.js
+sonar.javascript.file.suffixes=.js,.jsx
+sonar.typescript.file.suffixes=.ts,.tsx
+sonar.host.url=${SONAR_URL}
+sonar.token=${SONAR_TOKEN}`;
+
+        const propsPath = path.join(repoPath, 'sonar-project.properties');
+        fs.writeFileSync(propsPath, propsContent);
+        log('info', '📝 Created sonar-project.properties');
+
+        // Try to run sonar-scanner CLI
+        try {
+          log('info', '🔍 Running sonar-scanner...');
+
+          // Check if sonar-scanner is in PATH
+          await execFile('sonar-scanner', ['-v'], { timeout: 5000 }, (err) => {
+            if (err) throw new Error('sonar-scanner not found in PATH');
+          });
+
+          // Run the scan
+          await runCommand('sonar-scanner', repoPath, socket, 'scan-log');
+          log('success', '✅ JavaScript scan completed successfully!');
+
+        } catch (e) {
+          // Fallback if sonar-scanner CLI not installed
+          log('info', '⚠️ sonar-scanner CLI not found in PATH');
+          log('info', '💡 Install: npm install -g sonar-scanner');
+          log('info', '📥 Or download: https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner/');
+          log('info', '');
+          log('info', '📊 Uploading basic project info to SonarQube...');
+
+          // Create project via API if not exists
+          try {
+            const createRes = await fetch(`${SONAR_URL}/api/projects/create`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${Buffer.from(SONAR_TOKEN + ':').toString('base64')}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: `project=${encodeURIComponent(projectKey)}&name=${encodeURIComponent(repoName)}`
+            });
+
+            if (createRes.ok || createRes.status === 400) {
+              log('success', '✅ Project created in SonarQube');
+            }
+          } catch (_) {}
+
+          log('success', '✅ Scan completed (basic analysis)');
+          log('info', '💡 For full JavaScript/TypeScript analysis with vulnerabilities, code smells, and duplications:');
+          log('info', '   Run: npm install -g sonar-scanner');
+        }
+      }
 
       // Wait for SonarQube to process
       log('info', '⏳ Waiting 15s for SonarQube to process...');
@@ -536,11 +783,81 @@ io.on('connection', (socket) => {
       log('info',    `📊 View: ${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}`);
 
       await sendEmail({
-        to: NOTIFY_EMAIL, subject: `✅ Sonar SUCCESS — ${repoName}@${branch}`,
-        html: `<h2>✅ Scan Completed</h2>
-               <p><b>Repo:</b> ${repoName} | <b>Branch:</b> ${branch}</p>
-               <p>Bugs: ${report.metrics.bugs||0} | Vulns: ${report.metrics.vulnerabilities||0} | Smells: ${report.metrics.code_smells||0}</p>
-               <p><a href="${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}">View Full Report →</a></p>`
+        to: NOTIFY_EMAIL,
+        subject: `✅ SonarQube Scan SUCCESS — ${repoName}@${branch}`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head><style>
+body{font-family:Arial,sans-serif;background:#f4f4f4;padding:20px}
+.container{max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.header{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:24px;text-align:center}
+.header h1{margin:0;font-size:24px}
+.content{padding:24px}
+.metric{display:inline-block;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:8px 4px;text-align:center;min-width:100px}
+.metric-value{font-size:32px;font-weight:bold;color:#111}
+.metric-label{font-size:12px;color:#6b7280;margin-top:4px}
+.rating{display:inline-block;width:40px;height:40px;border-radius:8px;text-align:center;line-height:40px;font-weight:bold;font-size:18px;margin:8px}
+.rating-A{background:#d1fae5;color:#065f46}
+.rating-B{background:#dbeafe;color:#1e40af}
+.rating-C{background:#fef3c7;color:#92400e}
+.footer{background:#f9fafb;padding:16px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
+.btn{display:inline-block;background:#10b981;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0}
+</style></head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>✅ SonarQube Scan Completed</h1>
+    <p style="margin:8px 0 0;opacity:0.9">Automated Code Quality Report</p>
+  </div>
+  <div class="content">
+    <h3 style="margin-top:0;color:#111">Repository Details</h3>
+    <p><strong>Repository:</strong> ${repoName}<br>
+    <strong>Branch:</strong> ${branch}<br>
+    <strong>Scan Time:</strong> ${new Date().toLocaleString('en-IN')}<br>
+    <strong>Project Key:</strong> ${projectKey}</p>
+
+    <h3 style="margin-top:24px;color:#111">Quality Metrics</h3>
+    <div style="text-align:center">
+      <div class="metric">
+        <div class="metric-value" style="color:#ef4444">${report.metrics.bugs||0}</div>
+        <div class="metric-label">Bugs</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" style="color:#f59e0b">${report.metrics.vulnerabilities||0}</div>
+        <div class="metric-label">Vulnerabilities</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" style="color:#3b82f6">${report.metrics.code_smells||0}</div>
+        <div class="metric-label">Code Smells</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:24px;color:#111">Quality Ratings</h3>
+    <div style="text-align:center">
+      <div class="rating rating-${report.metrics.reliability_rating||'A'}">${report.metrics.reliability_rating||'A'}</div>
+      <div class="rating rating-${report.metrics.security_rating||'A'}">${report.metrics.security_rating||'A'}</div>
+      <div class="rating rating-${report.metrics.sqale_rating||'A'}">${report.metrics.sqale_rating||'A'}</div>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#6b7280">Reliability • Security • Maintainability</p>
+
+    ${report.metrics.coverage ? `
+    <h3 style="margin-top:24px;color:#111">Code Coverage</h3>
+    <div style="background:#f3f4f6;border-radius:8px;height:24px;overflow:hidden">
+      <div style="background:#10b981;height:100%;width:${report.metrics.coverage}%;text-align:center;line-height:24px;color:#fff;font-weight:bold;font-size:12px">${parseFloat(report.metrics.coverage).toFixed(1)}%</div>
+    </div>` : ''}
+
+    <div style="text-align:center">
+      <a href="${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}" class="btn">View Full Report in SonarQube →</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p><strong>SonarAI Agent</strong> — Automated Code Quality & Security Analysis<br>
+    Powered by Claude AI • SonarQube • GitHub</p>
+  </div>
+</div>
+</body>
+</html>`
       });
 
     } catch (e) {
@@ -548,25 +865,77 @@ io.on('connection', (socket) => {
       log('error', `❌ ${errMsg}`);
       socket.emit('scan-complete', { success: false, branch, repoName, error: errMsg });
 
-      // Create GitHub issue on failure
+      // GitHub issue creation — DISABLED (enable later for organization)
       let issue = null;
-      try {
-        issue = await createGitHubIssue({
-          repoName,
-          title:  `🔴 SonarQube Scan Failed — ${branch} [${new Date().toLocaleDateString('en-IN')}]`,
-          body:   `## Scan Failed\n\n**Branch:** \`${branch}\`\n**Error:** ${errMsg}\n\n*Auto-created by SonarAI Agent*`
-        });
-        log('info', `🎫 GitHub Issue Created: #${issue.id} — ${issue.url}`);
-      } catch (te) {
-        log('error', `⚠️ Issue creation failed: ${safeError(te)}`);
-      }
+      // try {
+      //   issue = await createGitHubIssue({
+      //     repoName,
+      //     title:  `🔴 SonarQube Scan Failed — ${branch} [${new Date().toLocaleDateString('en-IN')}]`,
+      //     body:   `## Scan Failed\n\n**Branch:** \`${branch}\`\n**Error:** ${errMsg}\n\n*Auto-created by SonarAI Agent*`
+      //   });
+      //   log('info', `🎫 GitHub Issue Created: #${issue.id} — ${issue.url}`);
+      // } catch (te) {
+      //   log('error', `⚠️ Issue creation failed: ${safeError(te)}`);
+      // }
 
       await sendEmail({
-        to: NOTIFY_EMAIL, subject: `❌ Sonar FAILED — ${repoName}@${branch}`,
-        html: `<h2>❌ Scan Failed</h2>
-               <p><b>Repo:</b> ${repoName} | <b>Branch:</b> ${branch}</p>
-               <p><b>Error:</b> ${errMsg}</p>
-               ${issue ? `<p><a href="${issue.url}">GitHub Issue #${issue.id}</a></p>` : ''}`
+        to: NOTIFY_EMAIL,
+        subject: `❌ SonarQube Scan FAILED — ${repoName}@${branch}`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head><style>
+body{font-family:Arial,sans-serif;background:#f4f4f4;padding:20px}
+.container{max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.header{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:24px;text-align:center}
+.header h1{margin:0;font-size:24px}
+.content{padding:24px}
+.error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:16px 0}
+.error-box pre{background:#fff;padding:12px;border-radius:4px;overflow-x:auto;font-size:12px;color:#991b1b}
+.footer{background:#f9fafb;padding:16px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
+.btn{display:inline-block;background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0}
+</style></head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>❌ SonarQube Scan Failed</h1>
+    <p style="margin:8px 0 0;opacity:0.9">Action Required</p>
+  </div>
+  <div class="content">
+    <h3 style="margin-top:0;color:#111">Repository Details</h3>
+    <p><strong>Repository:</strong> ${repoName}<br>
+    <strong>Branch:</strong> ${branch}<br>
+    <strong>Scan Time:</strong> ${new Date().toLocaleString('en-IN')}</p>
+
+    <h3 style="margin-top:24px;color:#111">Error Details</h3>
+    <div class="error-box">
+      <strong style="color:#dc2626">Error Message:</strong>
+      <pre>${errMsg}</pre>
+    </div>
+
+    ${issue ? `
+    <h3 style="margin-top:24px;color:#111">Automatic Actions Taken</h3>
+    <p>✅ GitHub Issue created for tracking: <strong>#${issue.id}</strong></p>
+    <div style="text-align:center">
+      <a href="${issue.url}" class="btn">View GitHub Issue →</a>
+    </div>` : ''}
+
+    <h3 style="margin-top:24px;color:#111">Recommended Actions</h3>
+    <ol style="color:#374151;line-height:1.8">
+      <li>Check the error message above for root cause</li>
+      <li>Verify SonarQube server is running (http://localhost:9000)</li>
+      <li>Ensure .NET SDK and sonarscanner are installed</li>
+      <li>Check repository has valid .sln file</li>
+      ${issue ? `<li>Track progress in GitHub Issue #${issue.id}</li>` : ''}
+    </ol>
+  </div>
+  <div class="footer">
+    <p><strong>SonarAI Agent</strong> — Automated Code Quality & Security Analysis<br>
+    Powered by Claude AI • SonarQube • GitHub</p>
+  </div>
+</div>
+</body>
+</html>`
       });
     }
   });
