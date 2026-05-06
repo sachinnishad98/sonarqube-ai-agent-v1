@@ -72,7 +72,7 @@
   .badge-minor    { background: rgba(59,130,246,.2); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
 
   /* Right panel */
-  .right-panel { width: 420px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .right-panel { width: 650px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .right-panel.hidden { display: none; }
 
   /* Log terminal */
@@ -242,6 +242,64 @@
       <div class="stat-card">
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">LAST SCAN</div>
         <div style="font-size:13px;font-weight:600" id="stat-last-scan">Never</div>
+      </div>
+    </div>
+
+    <!-- ADDITIONAL INFO SECTION - Bottom cards -->
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px">
+      <div class="stat-card" style="padding:24px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:12px;background:rgba(0,212,255,.1);display:flex;align-items:center;justify-content:center">
+            <i class="fa-solid fa-shield-halved" style="font-size:20px;color:var(--accent)"></i>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:600">Security Guardrails</div>
+            <div style="font-size:11px;color:var(--muted)">Powered by SonarQube + Claude AI</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:12px">
+          Automated security analysis detects vulnerabilities, code smells, and technical debt in real-time.
+          Every commit is scanned for OWASP Top 10 issues, injection flaws, and authentication weaknesses.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="badge" style="background:rgba(16,185,129,.1);color:var(--success);border:1px solid rgba(16,185,129,.2)">OWASP Coverage</span>
+          <span class="badge" style="background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)">AI-Powered</span>
+          <span class="badge" style="background:rgba(245,158,11,.1);color:var(--warning);border:1px solid rgba(245,158,11,.2)">Real-time</span>
+        </div>
+      </div>
+
+      <div class="stat-card" style="padding:24px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:12px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center">
+            <i class="fa-solid fa-brain" style="font-size:20px;color:var(--accent2)"></i>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:600">AI Code Review</div>
+            <div style="font-size:11px;color:var(--muted)">Claude 4.5 Sonnet Analysis</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:12px">
+          Deep semantic analysis identifies security vulnerabilities, performance bottlenecks, code duplications,
+          and provides actionable recommendations with CWE mappings and severity classifications.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="badge" style="background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2)">Vulnerabilities</span>
+          <span class="badge" style="background:rgba(59,130,246,.1);color:#93c5fd;border:1px solid rgba(59,130,246,.2)">Code Smells</span>
+          <span class="badge" style="background:rgba(16,185,129,.1);color:var(--success);border:1px solid rgba(16,185,129,.2)">Best Practices</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECENT ACTIVITY -->
+    <div class="stat-card" style="padding:20px;margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:600;color:var(--text)">📊 Recent Activity</div>
+        <div style="font-size:11px;color:var(--muted)" id="activity-last-update">No scans yet</div>
+      </div>
+      <div id="recent-activity-list" style="font-size:12px;color:var(--muted)">
+        <div style="padding:10px;background:var(--surface);border-radius:8px;text-align:center">
+          Run your first scan to see activity logs here
+        </div>
       </div>
     </div>
   </div>

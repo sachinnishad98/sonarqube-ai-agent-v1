@@ -827,76 +827,133 @@ sonar.token=${SONAR_TOKEN}`;
 
       await sendEmail({
         to: NOTIFY_EMAIL,
-        subject: `✅ SonarQube Scan SUCCESS — ${repoName}@${branch}`,
+        subject: `✅ Code Quality Scan Complete • ${repoName} (${branch}) • ${report.totalIssues} issues detected`,
         html: `
 <!DOCTYPE html>
 <html>
 <head><style>
-body{font-family:Arial,sans-serif;background:#f4f4f4;padding:20px}
-.container{max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-.header{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:24px;text-align:center}
-.header h1{margin:0;font-size:24px}
-.content{padding:24px}
-.metric{display:inline-block;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:8px 4px;text-align:center;min-width:100px}
-.metric-value{font-size:32px;font-weight:bold;color:#111}
-.metric-label{font-size:12px;color:#6b7280;margin-top:4px}
-.rating{display:inline-block;width:40px;height:40px;border-radius:8px;text-align:center;line-height:40px;font-weight:bold;font-size:18px;margin:8px}
-.rating-A{background:#d1fae5;color:#065f46}
-.rating-B{background:#dbeafe;color:#1e40af}
-.rating-C{background:#fef3c7;color:#92400e}
-.footer{background:#f9fafb;padding:16px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
-.btn{display:inline-block;background:#10b981;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f4f7fa;padding:20px;margin:0}
+.container{max-width:650px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)}
+.header{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:36px 28px;text-align:center}
+.header h1{margin:0;font-size:24px;font-weight:700}
+.header p{margin:8px 0 0;opacity:0.95;font-size:14px}
+.content{padding:32px 28px;color:#1f2937}
+.section{margin-bottom:28px}
+.section h3{margin:0 0 16px;color:#111827;font-size:16px;font-weight:600;border-bottom:2px solid #e5e7eb;padding-bottom:8px}
+.info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6}
+.info-label{color:#6b7280;font-size:13px;font-weight:500}
+.info-value{color:#111827;font-size:13px;font-weight:600;font-family:'Courier New',monospace}
+.metrics{display:flex;justify-content:space-around;margin:24px 0;padding:24px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb}
+.metric{text-align:center;flex:1}
+.metric-value{font-size:36px;font-weight:700;margin-bottom:6px;font-family:'Courier New',monospace}
+.metric-value.bugs{color:#ef4444}
+.metric-value.vulnerabilities{color:#f59e0b}
+.metric-value.smells{color:#3b82f6}
+.metric-label{font-size:12px;color:#6b7280;text-transform:uppercase;font-weight:600;letter-spacing:0.5px}
+.rating-box{display:inline-block;padding:20px 24px;background:#f9fafb;border-radius:10px;margin:8px;border:1px solid #e5e7eb;text-align:center}
+.rating-value{font-size:28px;font-weight:700;margin-bottom:6px;font-family:'Courier New',monospace}
+.rating-label{font-size:12px;color:#6b7280;font-weight:500}
+.footer{padding:24px 28px;background:#f9fafb;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
+.btn{display:inline-block;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:600;font-size:14px;box-shadow:0 4px 12px rgba(16,185,129,0.3)}
+.highlight{background:#fef3c7;padding:16px;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#92400e;margin:16px 0}
+.timestamp{color:#9ca3af;font-size:11px;font-style:italic}
+.rating-A{color:#065f46;background:#d1fae5;border:2px solid #10b981}
+.rating-B{color:#1e40af;background:#dbeafe;border:2px solid #3b82f6}
+.rating-C{color:#92400e;background:#fef3c7;border:2px solid #f59e0b}
+.rating-D{color:#991b1b;background:#fee2e2;border:2px solid #ef4444}
 </style></head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>✅ SonarQube Scan Completed</h1>
-    <p style="margin:8px 0 0;opacity:0.9">Automated Code Quality Report</p>
+    <h1>✅ SonarQube Scan Completed Successfully</h1>
+    <p>Automated Security & Quality Analysis Report</p>
   </div>
   <div class="content">
-    <h3 style="margin-top:0;color:#111">Repository Details</h3>
-    <p><strong>Repository:</strong> ${repoName}<br>
-    <strong>Branch:</strong> ${branch}<br>
-    <strong>Scan Time:</strong> ${new Date().toLocaleString('en-IN')}<br>
-    <strong>Project Key:</strong> ${projectKey}</p>
-
-    <h3 style="margin-top:24px;color:#111">Quality Metrics</h3>
-    <div style="text-align:center">
-      <div class="metric">
-        <div class="metric-value" style="color:#ef4444">${report.metrics.bugs||0}</div>
-        <div class="metric-label">Bugs</div>
+    <div class="section">
+      <h3>📋 Scan Summary</h3>
+      <div class="info-row">
+        <span class="info-label">Repository</span>
+        <span class="info-value">${repoName}</span>
       </div>
-      <div class="metric">
-        <div class="metric-value" style="color:#f59e0b">${report.metrics.vulnerabilities||0}</div>
-        <div class="metric-label">Vulnerabilities</div>
+      <div class="info-row">
+        <span class="info-label">Branch</span>
+        <span class="info-value">${branch}</span>
       </div>
-      <div class="metric">
-        <div class="metric-value" style="color:#3b82f6">${report.metrics.code_smells||0}</div>
-        <div class="metric-label">Code Smells</div>
+      <div class="info-row">
+        <span class="info-label">Scan Timestamp</span>
+        <span class="info-value timestamp">${new Date().toLocaleString('en-IN', {dateStyle:'medium',timeStyle:'short'})}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Project Key</span>
+        <span class="info-value">${projectKey}</span>
       </div>
     </div>
 
-    <h3 style="margin-top:24px;color:#111">Quality Ratings</h3>
-    <div style="text-align:center">
-      <div class="rating rating-${report.metrics.reliability_rating||'A'}">${report.metrics.reliability_rating||'A'}</div>
-      <div class="rating rating-${report.metrics.security_rating||'A'}">${report.metrics.security_rating||'A'}</div>
-      <div class="rating rating-${report.metrics.sqale_rating||'A'}">${report.metrics.sqale_rating||'A'}</div>
+    <div class="highlight">
+      <strong>🔍 Total Issues Detected:</strong> ${report.totalIssues} issues require attention. Review the detailed breakdown below and prioritize critical vulnerabilities first.
     </div>
-    <p style="text-align:center;font-size:12px;color:#6b7280">Reliability • Security • Maintainability</p>
+
+    <div class="section">
+      <h3>📊 Issue Breakdown</h3>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-value bugs">${report.metrics.bugs||0}</div>
+          <div class="metric-label">Bugs</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value vulnerabilities">${report.metrics.vulnerabilities||0}</div>
+          <div class="metric-label">Vulnerabilities</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value smells">${report.metrics.code_smells||0}</div>
+          <div class="metric-label">Code Smells</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>⭐ Quality Ratings</h3>
+      <div style="text-align:center">
+        <div class="rating-box rating-${report.metrics.reliability_rating||'A'}">
+          <div class="rating-value">${report.metrics.reliability_rating||'A'}</div>
+          <div class="rating-label">Reliability</div>
+        </div>
+        <div class="rating-box rating-${report.metrics.security_rating||'A'}">
+          <div class="rating-value">${report.metrics.security_rating||'A'}</div>
+          <div class="rating-label">Security</div>
+        </div>
+        <div class="rating-box rating-${report.metrics.sqale_rating||'A'}">
+          <div class="rating-value">${report.metrics.sqale_rating||'A'}</div>
+          <div class="rating-label">Maintainability</div>
+        </div>
+      </div>
+    </div>
 
     ${report.metrics.coverage ? `
-    <h3 style="margin-top:24px;color:#111">Code Coverage</h3>
-    <div style="background:#f3f4f6;border-radius:8px;height:24px;overflow:hidden">
-      <div style="background:#10b981;height:100%;width:${report.metrics.coverage}%;text-align:center;line-height:24px;color:#fff;font-weight:bold;font-size:12px">${parseFloat(report.metrics.coverage).toFixed(1)}%</div>
+    <div class="section">
+      <h3>📈 Code Coverage</h3>
+      <div style="background:#f3f4f6;border-radius:12px;height:32px;overflow:hidden;border:1px solid #e5e7eb">
+        <div style="background:linear-gradient(90deg,#10b981,#059669);height:100%;width:${report.metrics.coverage}%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-size:14px;transition:width 0.3s">${parseFloat(report.metrics.coverage).toFixed(1)}%</div>
+      </div>
     </div>` : ''}
 
-    <div style="text-align:center">
-      <a href="${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}" class="btn">View Full Report in SonarQube →</a>
+    <div style="text-align:center;margin-top:32px">
+      <a href="${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}" class="btn">📊 View Full Report in SonarQube →</a>
+    </div>
+
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin-top:24px;font-size:13px;color:#1e40af">
+      <strong>💡 Next Steps:</strong>
+      <ul style="margin:8px 0 0;padding-left:20px">
+        <li>Review high-severity vulnerabilities in the SonarQube dashboard</li>
+        <li>Address critical bugs before merging to production</li>
+        <li>Run AI code review for semantic analysis and recommendations</li>
+      </ul>
     </div>
   </div>
   <div class="footer">
-    <p><strong>SonarAI Agent</strong> — Automated Code Quality & Security Analysis<br>
-    Powered by Claude AI • SonarQube • GitHub</p>
+    <p><strong>🤖 SonarAI Agent</strong> — Enterprise Code Quality & Security Platform<br>
+    Powered by Claude 4.5 Sonnet • SonarQube v26 • GitHub Integration<br>
+    <span style="font-size:10px;color:#9ca3af">Automated scan initiated at ${new Date().toLocaleString('en-IN')}</span></p>
   </div>
 </div>
 </body>
@@ -923,58 +980,100 @@ body{font-family:Arial,sans-serif;background:#f4f4f4;padding:20px}
 
       await sendEmail({
         to: NOTIFY_EMAIL,
-        subject: `❌ SonarQube Scan FAILED — ${repoName}@${branch}`,
+        subject: `❌ Code Quality Scan Failed • ${repoName} (${branch}) • Action Required`,
         html: `
 <!DOCTYPE html>
 <html>
 <head><style>
-body{font-family:Arial,sans-serif;background:#f4f4f4;padding:20px}
-.container{max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-.header{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:24px;text-align:center}
-.header h1{margin:0;font-size:24px}
-.content{padding:24px}
-.error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:16px 0}
-.error-box pre{background:#fff;padding:12px;border-radius:4px;overflow-x:auto;font-size:12px;color:#991b1b}
-.footer{background:#f9fafb;padding:16px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
-.btn{display:inline-block;background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f4f7fa;padding:20px;margin:0}
+.container{max-width:650px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)}
+.header{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:36px 28px;text-align:center}
+.header h1{margin:0;font-size:24px;font-weight:700}
+.header p{margin:8px 0 0;opacity:0.95;font-size:14px}
+.content{padding:32px 28px;color:#1f2937}
+.section{margin-bottom:28px}
+.section h3{margin:0 0 16px;color:#111827;font-size:16px;font-weight:600;border-bottom:2px solid #e5e7eb;padding-bottom:8px}
+.info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6}
+.info-label{color:#6b7280;font-size:13px;font-weight:500}
+.info-value{color:#111827;font-size:13px;font-weight:600;font-family:'Courier New',monospace}
+.error-box{background:#fee2e2;border:2px solid #ef4444;border-radius:12px;padding:20px;margin:16px 0}
+.error-box pre{background:#fff;padding:14px;border-radius:8px;overflow-x:auto;font-size:12px;color:#991b1b;font-family:'Courier New',monospace;line-height:1.6;border:1px solid #fecaca}
+.footer{padding:24px 28px;background:#f9fafb;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
+.btn{display:inline-block;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:600;font-size:14px;box-shadow:0 4px 12px rgba(239,68,68,0.3)}
+.alert{background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;padding:16px;margin:16px 0;font-size:13px;color:#92400e}
+.timestamp{color:#9ca3af;font-size:11px;font-style:italic}
 </style></head>
 <body>
 <div class="container">
   <div class="header">
     <h1>❌ SonarQube Scan Failed</h1>
-    <p style="margin:8px 0 0;opacity:0.9">Action Required</p>
+    <p>Immediate Action Required</p>
   </div>
   <div class="content">
-    <h3 style="margin-top:0;color:#111">Repository Details</h3>
-    <p><strong>Repository:</strong> ${repoName}<br>
-    <strong>Branch:</strong> ${branch}<br>
-    <strong>Scan Time:</strong> ${new Date().toLocaleString('en-IN')}</p>
+    <div class="alert">
+      <strong>⚠️ Scan Failure:</strong> The automated code quality scan encountered an error and could not complete. Review the error details below and take corrective action.
+    </div>
 
-    <h3 style="margin-top:24px;color:#111">Error Details</h3>
-    <div class="error-box">
-      <strong style="color:#dc2626">Error Message:</strong>
-      <pre>${errMsg}</pre>
+    <div class="section">
+      <h3>📋 Scan Details</h3>
+      <div class="info-row">
+        <span class="info-label">Repository</span>
+        <span class="info-value">${repoName}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Branch</span>
+        <span class="info-value">${branch}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Failed At</span>
+        <span class="info-value timestamp">${new Date().toLocaleString('en-IN', {dateStyle:'medium',timeStyle:'short'})}</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>🔴 Error Details</h3>
+      <div class="error-box">
+        <strong style="color:#dc2626;font-size:14px">Error Message:</strong>
+        <pre>${errMsg}</pre>
+      </div>
     </div>
 
     ${issue ? `
-    <h3 style="margin-top:24px;color:#111">Automatic Actions Taken</h3>
-    <p>✅ GitHub Issue created for tracking: <strong>#${issue.id}</strong></p>
-    <div style="text-align:center">
-      <a href="${issue.url}" class="btn">View GitHub Issue →</a>
+    <div class="section">
+      <h3>🎫 Automatic Actions Taken</h3>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px">
+        <p style="margin:0;color:#1e40af">✅ GitHub Issue created for tracking: <strong>#${issue.id}</strong></p>
+        <div style="text-align:center;margin-top:12px">
+          <a href="${issue.url}" class="btn" style="background:linear-gradient(135deg,#3b82f6,#2563eb);box-shadow:0 4px 12px rgba(59,130,246,0.3)">View GitHub Issue →</a>
+        </div>
+      </div>
     </div>` : ''}
 
-    <h3 style="margin-top:24px;color:#111">Recommended Actions</h3>
-    <ol style="color:#374151;line-height:1.8">
-      <li>Check the error message above for root cause</li>
-      <li>Verify SonarQube server is running (http://localhost:9000)</li>
-      <li>Ensure .NET SDK and sonarscanner are installed</li>
-      <li>Check repository has valid .sln file</li>
-      ${issue ? `<li>Track progress in GitHub Issue #${issue.id}</li>` : ''}
-    </ol>
+    <div class="section">
+      <h3>🛠️ Troubleshooting Steps</h3>
+      <ol style="color:#374151;line-height:2;font-size:13px;padding-left:20px">
+        <li><strong>Verify SonarQube Server:</strong> Ensure SonarQube is running at <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px">http://localhost:9000</code></li>
+        <li><strong>Check Dependencies:</strong> Confirm .NET SDK, sonar-scanner CLI, and required tools are installed</li>
+        <li><strong>Review Error Message:</strong> Analyze the error details above for specific failure reason</li>
+        <li><strong>Validate Repository:</strong> Ensure the repository has a valid solution file (.sln) for .NET projects</li>
+        <li><strong>Check Permissions:</strong> Verify SonarQube token and GitHub access tokens are valid</li>
+        ${issue ? `<li><strong>Track Resolution:</strong> Update progress in GitHub Issue <a href="${issue.url}" style="color:#3b82f6">#${issue.id}</a></li>` : ''}
+      </ol>
+    </div>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:24px;font-size:13px;color:#991b1b">
+      <strong>⚡ Quick Fix Commands:</strong>
+      <ul style="margin:8px 0 0;padding-left:20px;line-height:1.8">
+        <li>Start SonarQube: <code style="background:#fff;padding:2px 6px;border-radius:4px">StartSonar.bat</code></li>
+        <li>Check status: <code style="background:#fff;padding:2px 6px;border-radius:4px">check-sonar.bat</code></li>
+        <li>Re-run scan after fix from dashboard</li>
+      </ul>
+    </div>
   </div>
   <div class="footer">
-    <p><strong>SonarAI Agent</strong> — Automated Code Quality & Security Analysis<br>
-    Powered by Claude AI • SonarQube • GitHub</p>
+    <p><strong>🤖 SonarAI Agent</strong> — Enterprise Code Quality & Security Platform<br>
+    Powered by Claude 4.5 Sonnet • SonarQube v26 • GitHub Integration<br>
+    <span style="font-size:10px;color:#9ca3af">Scan attempted at ${new Date().toLocaleString('en-IN')}</span></p>
   </div>
 </div>
 </body>
