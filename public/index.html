@@ -1089,8 +1089,129 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
         <a href="${sonarLink}" target="_blank" style="flex:1;text-align:center;padding:8px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);border-radius:8px;color:var(--accent);text-decoration:none;font-size:11px"><i class="fa-solid fa-external-link"></i> View in SonarQube</a>
       </div>
       <div style="margin-top:8px;font-size:11px;color:var(--success)"><i class="fa-solid fa-envelope"></i> Success email notification sent</div>
+
+      <!-- AI-POWERED FIX SUGGESTIONS FOR SONARQUBE ISSUES -->
+      ${(m.bugs||0) > 0 || (m.code_smells||0) > 0 || (m.vulnerabilities||0) > 0 ? `
+        <div id="ai-sonar-suggestions-${projectKey}" style="margin-top:16px">
+          <div style="background:linear-gradient(135deg,rgba(217,70,239,.1),rgba(139,92,246,.1));border:2px solid var(--accent);border-radius:12px;padding:16px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+              <i class="fa-solid fa-wand-magic-sparkles" style="font-size:18px;color:var(--accent)"></i>
+              <div style="font-size:14px;font-weight:700;color:var(--accent)">🤖 AI-Powered Fix Suggestions</div>
+            </div>
+            <div style="font-size:11px;color:var(--text);margin-bottom:12px;line-height:1.6">
+              SonarQube detected <strong>${m.bugs||0} Bugs</strong>, <strong>${m.vulnerabilities||0} Vulnerabilities</strong>, and <strong>${m.code_smells||0} Code Smells</strong>.
+              Claude Sonnet 4.5 will analyze your code and provide specific fix recommendations.
+            </div>
+            <button onclick="fetchAISonarSuggestions('${projectKey}', '${branch}', '${repoName}')" id="ai-suggest-btn-${projectKey}"
+              style="width:100%;background:linear-gradient(135deg,#d946ef,#c026d3);color:#fff;font-weight:600;border:none;border-radius:10px;padding:12px;cursor:pointer;font-size:13px">
+              <i class="fa-solid fa-sparkles"></i> Get AI-Powered Fix Suggestions from Claude
+            </button>
+            <div id="ai-suggest-result-${projectKey}" style="margin-top:12px"></div>
+          </div>
+        </div>
+      ` : ''}
     </div>`;
 });
+
+// ── FETCH AI SUGGESTIONS FOR SONARQUBE ISSUES ────────────────────────────────
+function fetchAISonarSuggestions(projectKey, branch, repoName) {
+  const btn = document.getElementById(`ai-suggest-btn-${projectKey}`);
+  const resultDiv = document.getElementById(`ai-suggest-result-${projectKey}`);
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing with Claude AI...';
+
+  resultDiv.innerHTML = `
+    <div style="background:var(--surface);border-radius:8px;padding:12px;font-size:11px;color:var(--muted);text-align:center">
+      <i class="fa-solid fa-brain" style="font-size:16px;color:var(--accent);margin-bottom:6px;display:block"></i>
+      Claude Sonnet 4.5 is analyzing your code for specific fix recommendations...
+    </div>
+  `;
+
+  // Trigger AI review
+  socket.emit('ai-review', { branch, repoName });
+
+  // Listen for result
+  const reviewHandler = ({ success, review, error }) => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-sparkles"></i> Get AI-Powered Fix Suggestions from Claude';
+
+    if (!success) {
+      resultDiv.innerHTML = `
+        <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px;font-size:11px;color:#fca5a5">
+          ❌ ${escHtml(error || 'AI analysis failed')}
+        </div>
+      `;
+      socket.off('review-result', reviewHandler);
+      return;
+    }
+
+    const issues = Array.isArray(review.issues) ? review.issues : [];
+
+    if (issues.length === 0) {
+      resultDiv.innerHTML = `
+        <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:10px;font-size:11px;color:var(--success)">
+          ✅ No critical issues found by AI analysis!
+        </div>
+      `;
+      socket.off('review-result', reviewHandler);
+      return;
+    }
+
+    // Display AI suggestions
+    resultDiv.innerHTML = `
+      <div style="background:var(--card);border-radius:8px;padding:12px;max-height:500px;overflow-y:auto">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          🧠 Claude AI identified ${issues.length} issue${issues.length>1?'s':''} with actionable fixes:
+        </div>
+        ${issues.slice(0,10).map((issue, i) => {
+          const severityColors = {
+            critical: '#ef4444',
+            major: '#f59e0b',
+            minor: '#3b82f6'
+          };
+          const bgColors = {
+            critical: 'rgba(239,68,68,.1)',
+            major: 'rgba(245,158,11,.1)',
+            minor: 'rgba(59,130,246,.1)'
+          };
+          return `
+            <div style="background:${bgColors[issue.severity] || 'var(--surface)'};border-left:3px solid ${severityColors[issue.severity] || 'var(--border)'};border-radius:6px;padding:10px;margin-bottom:10px">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                <span style="background:${severityColors[issue.severity]};color:#fff;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase">${issue.severity}</span>
+                ${issue.category ? `<span style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:9px">${issue.category}</span>` : ''}
+                ${issue.cwe ? `<span style="background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:9px;font-family:monospace">${issue.cwe}</span>` : ''}
+              </div>
+              <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">${i+1}. ${escHtml(issue.title)}</div>
+              <div style="font-size:10px;color:var(--muted);margin-bottom:6px">
+                📍 ${escHtml(issue.file)}${issue.line ? ':'+issue.line : ''}
+              </div>
+              <div style="font-size:10px;color:var(--text);margin-bottom:8px;line-height:1.5">
+                <strong>Issue:</strong> ${escHtml(issue.description)}
+              </div>
+              <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;padding:8px">
+                <div style="font-size:10px;font-weight:700;color:var(--success);margin-bottom:4px">
+                  💡 Recommended Fix:
+                </div>
+                <div style="font-size:10px;color:var(--text);line-height:1.5">${escHtml(issue.fix)}</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+        ${issues.length > 10 ? `
+          <div style="text-align:center;font-size:10px;color:var(--muted);padding:8px">
+            ...and ${issues.length - 10} more issue${issues.length - 10 > 1 ? 's' : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    socket.off('review-result', reviewHandler);
+  };
+
+  socket.on('review-result', reviewHandler);
+}
+
 </script>
 </body>
 </html>
