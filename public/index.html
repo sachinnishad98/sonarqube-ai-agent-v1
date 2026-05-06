@@ -868,15 +868,30 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
         <div style="background:rgba(239,68,68,.1);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:#fca5a5">${m.bugs||0}</div>
-          <div style="font-size:10px;color:var(--muted)">Bugs</div>
+          <div style="font-size:10px;color:var(--muted)">Bugs (Reliability)</div>
         </div>
         <div style="background:rgba(245,158,11,.1);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:#fcd34d">${m.vulnerabilities||0}</div>
-          <div style="font-size:10px;color:var(--muted)">Vulns</div>
+          <div style="font-size:10px;color:var(--muted)">Vulnerabilities (Security)</div>
         </div>
         <div style="background:rgba(59,130,246,.1);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:#93c5fd">${m.code_smells||0}</div>
-          <div style="font-size:10px;color:var(--muted)">Smells</div>
+          <div style="font-size:10px;color:var(--muted)">Code Smells (Maintainability)</div>
+        </div>
+      </div>
+
+      <!-- SonarQube Mapping Info -->
+      <div style="background:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px">
+          📊 <strong>SonarQube Quality Model Mapping:</strong>
+        </div>
+        <div style="font-size:10px;color:var(--text);line-height:1.6">
+          • <strong>Reliability (${m.bugs||0} issues)</strong> = Bugs<br>
+          • <strong>Maintainability (${m.code_smells||0} issues)</strong> = Code Smells<br>
+          • <strong>Security (${m.vulnerabilities||0} issues)</strong> = Vulnerabilities
+        </div>
+        <div style="font-size:9px;color:var(--muted);margin-top:6px">
+          💡 In SonarQube dashboard, these are shown as Reliability/Maintainability/Security metrics
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
