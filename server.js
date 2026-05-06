@@ -864,9 +864,12 @@ sonar.token=${SONAR_TOKEN}`;
       log('success', `✅ Scan complete — ${report.totalIssues} issues found`);
       log('info',    `📊 View: ${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}`);
 
-      await sendEmail({
-        to: NOTIFY_EMAIL,
-        subject: `✅ Code Quality Scan Complete • ${repoName} (${branch}) • ${report.totalIssues} issues detected`,
+      // Send SonarQube scan report email
+      log('info', '📧 Sending SonarQube scan report email...');
+      try {
+        await sendEmail({
+          to: NOTIFY_EMAIL,
+          subject: `✅ Code Quality Scan Complete • ${repoName} (${branch}) • ${report.totalIssues} issues detected`,
         html: `
 <!DOCTYPE html>
 <html>
@@ -997,7 +1000,11 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f4f7fa;
 </div>
 </body>
 </html>`
-      });
+        });
+        log('success', '✅ SonarQube report email sent successfully');
+      } catch (emailErr) {
+        log('error', `⚠️ Email sending failed: ${safeError(emailErr)}`);
+      }
 
     } catch (e) {
       const errMsg = safeError(e);
