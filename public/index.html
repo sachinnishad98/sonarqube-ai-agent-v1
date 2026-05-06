@@ -26,11 +26,11 @@
   body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
   .mono { font-family: 'Space Mono', monospace; }
 
-  /* Scanline effect */
-  body::before {
+  /* Scanline effect - disabled for light theme */
+  /* body::before {
     content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
     background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px);
-  }
+  } */
 
   /* Glow card */
   .glow-card { position: relative; }
@@ -152,10 +152,10 @@
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div style="padding:16px 8px 8px">
-    <div style="padding:10px 16px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:12px;margin-bottom:16px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:2px">PROJECT</div>
-      <div style="font-weight:600;font-size:14px">Project Name(sachinnishad98)</div>
-      <div style="font-size:11px;color:var(--muted)">Repository Name</div>
+    <div style="padding:10px 16px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:12px;margin-bottom:16px">
+      <div style="font-size:11px;color:rgba(255,255,255,.9);margin-bottom:2px;font-weight:600">PROJECT</div>
+      <div style="font-weight:600;font-size:14px;color:#fff">Project Name(sachinnishad98)</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.85)">Repository Name</div>
     </div>
 
     <div style="font-size:10px;color:var(--muted);padding:4px 16px 8px;font-weight:600;letter-spacing:.05em">NAVIGATION</div>
