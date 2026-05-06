@@ -730,28 +730,64 @@ sonar.token=${SONAR_TOKEN}`;
         fs.writeFileSync(propsPath, propsContent);
         log('info', '📝 Created sonar-project.properties');
 
-        // Try to run sonar-scanner CLI
-        try {
-          log('info', '🔍 Running sonar-scanner...');
+        // Try to run sonar-scanner CLI (with quick timeout)
+        let scannerFound = false;
 
-          // Check if sonar-scanner is in PATH
-          await execFile('sonar-scanner', ['-v'], { timeout: 5000 }, (err) => {
-            if (err) throw new Error('sonar-scanner not found in PATH');
+        try {
+          log('info', '🔍 Checking for sonar-scanner CLI...');
+
+          // Quick check if sonar-scanner exists (2 second timeout)
+          await new Promise((resolve, reject) => {
+            const checkProcess = execFile('sonar-scanner', ['-v'], { timeout: 2000 }, (err, stdout) => {
+              if (err) {
+                reject(new Error('sonar-scanner not found'));
+              } else {
+                scannerFound = true;
+                resolve(stdout);
+              }
+            });
+
+            // Force timeout after 2 seconds
+            setTimeout(() => {
+              try { checkProcess.kill(); } catch (_) {}
+              reject(new Error('timeout'));
+            }, 2000);
           });
 
-          // Run the scan
-          await runCommand('sonar-scanner', repoPath, socket, 'scan-log');
-          log('success', '✅ JavaScript scan completed successfully!');
+          if (scannerFound) {
+            log('success', '✅ sonar-scanner CLI found');
+            log('info', '🔍 Running full JavaScript analysis...');
+
+            // Run the scan with timeout
+            await Promise.race([
+              runCommand('sonar-scanner', repoPath, socket, 'scan-log'),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Scan timeout after 5 minutes')), 300000)
+              )
+            ]);
+
+            log('success', '✅ JavaScript scan completed successfully!');
+          }
 
         } catch (e) {
-          // Fallback if sonar-scanner CLI not installed
-          log('info', '⚠️ sonar-scanner CLI not found in PATH');
-          log('info', '💡 Install: npm install -g sonar-scanner');
-          log('info', '📥 Or download: https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner/');
-          log('info', '');
-          log('info', '📊 Uploading basic project info to SonarQube...');
+          // Fallback: sonar-scanner not installed or timed out
+          if (scannerFound) {
+            log('error', `⚠️ Scan failed: ${safeError(e)}`);
+          } else {
+            log('info', '⚠️ sonar-scanner CLI not found in PATH');
+          }
 
-          // Create project via API if not exists
+          log('info', '📊 Creating project in SonarQube (basic analysis)...');
+          log('info', '');
+          log('info', '💡 For FULL JavaScript analysis with:');
+          log('info', '   • Security vulnerabilities');
+          log('info', '   • Code smells & duplications');
+          log('info', '   • Complexity metrics');
+          log('info', '   Install: npm install -g sonar-scanner');
+          log('info', '   Or download: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/');
+          log('info', '');
+
+          // Create project via API (minimal scan)
           try {
             const createRes = await fetch(`${SONAR_URL}/api/projects/create`, {
               method: 'POST',
@@ -762,14 +798,21 @@ sonar.token=${SONAR_TOKEN}`;
               body: `project=${encodeURIComponent(projectKey)}&name=${encodeURIComponent(repoName)}`
             });
 
-            if (createRes.ok || createRes.status === 400) {
+            if (createRes.ok) {
               log('success', '✅ Project created in SonarQube');
+              log('info', `📊 View: ${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}`);
+            } else if (createRes.status === 400) {
+              log('success', '✅ Project already exists in SonarQube');
+              log('info', `📊 View: ${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}`);
+            } else {
+              log('info', `⚠️ API returned ${createRes.status}`);
             }
-          } catch (_) {}
+          } catch (apiErr) {
+            log('error', `⚠️ Could not create project: ${safeError(apiErr)}`);
+          }
 
-          log('success', '✅ Scan completed (basic analysis)');
-          log('info', '💡 For full JavaScript/TypeScript analysis with vulnerabilities, code smells, and duplications:');
-          log('info', '   Run: npm install -g sonar-scanner');
+          log('success', '✅ Scan completed (basic project registration)');
+          log('info', '💡 Project is now visible in SonarQube, but detailed metrics require sonar-scanner CLI');
         }
       }
 
