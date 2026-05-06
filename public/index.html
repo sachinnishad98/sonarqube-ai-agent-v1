@@ -689,6 +689,69 @@ socket.on('review-result', ({ success, review, error }) => {
     <!-- ENHANCED AI REVIEW DASHBOARD -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;font-size:12px;max-height:600px;overflow-y:auto">
 
+      <!-- AI POWERED BANNER -->
+      <div style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;color:#fff">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">🤖 AI-Powered Code Analysis</div>
+        <div style="font-size:11px;opacity:0.95">Analyzed by <strong>Claude Sonnet 4.5</strong> (Anthropic AI)</div>
+        <div style="font-size:10px;opacity:0.85;margin-top:2px">Deep semantic analysis • Security vulnerabilities • Code quality • Performance</div>
+      </div>
+
+      <!-- AI SUGGESTIONS & FIXES (PRIORITY) -->
+      ${issues.length > 0 ? `
+        <div style="background:linear-gradient(135deg,rgba(217,70,239,.1),rgba(139,92,246,.1));border:2px solid var(--accent);border-radius:12px;padding:16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <i class="fa-solid fa-wand-magic-sparkles" style="font-size:18px;color:var(--accent)"></i>
+            <div style="font-size:14px;font-weight:700;color:var(--accent)">AI-Suggested Fixes (Priority Order)</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-style:italic">
+            Claude AI has identified ${issues.length} issue${issues.length>1?'s':''} with actionable fix recommendations
+          </div>
+          ${issues.slice(0,8).map((issue,i) => {
+            const severityColors = {
+              critical: '#ef4444',
+              major: '#f59e0b',
+              minor: '#3b82f6'
+            };
+            const bgColors = {
+              critical: 'rgba(239,68,68,.1)',
+              major: 'rgba(245,158,11,.1)',
+              minor: 'rgba(59,130,246,.1)'
+            };
+            return `
+              <div style="background:${bgColors[issue.severity] || 'var(--surface)'};border-left:4px solid ${severityColors[issue.severity] || 'var(--border)'};border-radius:8px;padding:12px;margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+                  <div style="flex:1">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                      <span style="background:${severityColors[issue.severity]};color:#fff;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase">${issue.severity}</span>
+                      ${issue.category ? `<span style="background:var(--surface);color:var(--text);padding:2px 8px;border-radius:4px;font-size:9px;font-weight:600">${issue.category}</span>` : ''}
+                      ${issue.cwe ? `<span style="background:#dc2626;color:#fff;padding:2px 6px;border-radius:4px;font-size:9px;font-family:'Space Mono',monospace">${issue.cwe}</span>` : ''}
+                    </div>
+                    <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">${i+1}. ${escHtml(issue.title || 'Issue')}</div>
+                    <div style="font-size:11px;color:var(--text);line-height:1.5;margin-bottom:8px">
+                      <strong>📍 Location:</strong> ${escHtml(issue.file || 'Unknown')}${issue.line ? `:${issue.line}` : ''}
+                    </div>
+                    <div style="font-size:11px;color:var(--text);line-height:1.6;margin-bottom:8px">
+                      <strong>⚠️ Issue:</strong> ${escHtml(issue.description || 'No description')}
+                    </div>
+                    <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;padding:10px;margin-top:8px">
+                      <div style="font-size:10px;font-weight:700;color:var(--success);margin-bottom:4px;display:flex;align-items:center;gap:4px">
+                        <i class="fa-solid fa-lightbulb"></i> AI-Recommended Fix:
+                      </div>
+                      <div style="font-size:11px;color:var(--text);line-height:1.6">${escHtml(issue.fix || 'Review manually')}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+          ${issues.length > 8 ? `
+            <div style="text-align:center;font-size:11px;color:var(--muted);padding:8px">
+              ...and ${issues.length - 8} more issue${issues.length - 8 > 1 ? 's' : ''} detected
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
+
       <!-- HEADER SCORE -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
         <div style="font-size:36px;font-weight:700;font-family:'Space Mono',monospace;color:${scoreColor}">${score}</div>
