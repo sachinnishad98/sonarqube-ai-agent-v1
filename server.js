@@ -726,10 +726,16 @@ ${codeSnippet}` }]
         review.secretsFound = { detected: false, count: 0, secrets: [] };
       }
 
-      // Ensure totalCodeLines is set
-      if (!review.totalCodeLines) {
-        review.totalCodeLines = totalCodeLines;
+      // FORCE SET totalCodeLines from actual scan (don't trust AI response)
+      review.totalCodeLines = totalCodeLines;
+      review.linesOfCode = totalCodeLines;
+
+      // Add analyzed files info
+      if (!review.files || review.files.length === 0) {
+        review.files = analyzedFiles.map(f => f.file);
       }
+
+      log(`✅ Review complete: ${totalCodeLines} lines analyzed from ${analyzedFiles.length} files`);
 
       socket.emit('review-result', { success: true, branch, repoName, review });
       log(`✅ Done — Score: ${review.score ?? '—'}/100`);
