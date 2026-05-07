@@ -289,7 +289,11 @@ function generateAIReviewReport(review, repoName, branch) {
   const minorIssues = issues.filter(i => i.severity === 'minor');
   const hasIssues = issues.length > 0;
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:'Segoe UI',sans-serif;background:#f4f7fa;padding:20px;margin:0;color:#1f2937}.container{max-width:800px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)}.header{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;padding:40px 32px;text-align:center}.header h1{margin:0 0 8px;font-size:28px;font-weight:700}.header p{margin:0;opacity:0.95;font-size:15px}.score-section{background:#f9fafb;padding:32px;text-align:center;border-bottom:1px solid #e5e7eb}.score-circle{width:140px;height:140px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:700;border:8px solid}.stats-row{display:flex;justify-content:space-around;padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}.stat-value{font-size:28px;font-weight:700;font-family:monospace;margin-bottom:4px}.stat-label{font-size:12px;color:#6b7280;font-weight:600}.metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:32px}.metric-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center}.bar-container{background:#f3f4f6;border-radius:8px;height:32px;overflow:hidden;margin:8px 0}.bar-fill{height:100%;display:flex;align-items:center;padding:0 12px;color:#fff;font-weight:700;font-size:13px}.section{padding:32px;border-top:1px solid #e5e7eb}.section h2{margin:0 0 20px;color:#111827;font-size:20px;font-weight:700}.issue-card{background:#f9fafb;border-left:4px solid;border-radius:8px;padding:16px;margin-bottom:12px}.issue-card.critical{border-color:#ef4444;background:rgba(239,68,68,0.05)}.issue-card.major{border-color:#f59e0b;background:rgba(245,158,11,0.05)}.issue-card.minor{border-color:#3b82f6;background:rgba(59,130,246,0.05)}.badge{padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase}.badge.critical{background:#ef4444;color:#fff}.badge.major{background:#f59e0b;color:#fff}.badge.minor{background:#3b82f6;color:#fff}.issue-title{font-size:15px;font-weight:700;color:#111827;margin:8px 0}.issue-location{font-size:12px;color:#6b7280;margin-bottom:8px;font-family:monospace}.issue-description{font-size:13px;color:#374151;line-height:1.6;margin-bottom:12px}.fix-box{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:12px;margin-top:8px}.fix-box-title{font-size:12px;font-weight:700;color:#059669;margin-bottom:6px}.fix-box-content{font-size:13px;color:#047857;line-height:1.6}.congratulations{background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.1));border:2px solid #10b981;border-radius:12px;padding:24px;text-align:center}.congratulations h3{margin:0 0 12px;color:#059669;font-size:22px}.congratulations p{margin:0;color:#047857;font-size:14px;line-height:1.6}.footer{background:#f9fafb;padding:24px 32px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}</style></head><body><div class="container"><div class="header"><h1>${scoreEmoji} AI Code Review Report</h1><p><strong>Repository:</strong> ${repoName} • <strong>Branch:</strong> ${branch}</p><p style="font-size:13px;margin-top:8px;opacity:0.9">Analyzed by Claude Sonnet 4.5 (Anthropic AI)</p></div><div class="score-section"><div class="score-circle" style="border-color:${scoreColor};color:${scoreColor}">${score}</div><div style="font-size:14px;color:#6b7280;margin-top:8px;font-weight:600">OVERALL QUALITY SCORE</div><p style="font-size:13px;color:#6b7280;margin-top:12px">${review.summary || 'Code analysis complete'}</p></div><div class="stats-row"><div style="text-align:center"><div class="stat-value" style="color:#ef4444">${bugs}</div><div class="stat-label">Bugs</div></div><div style="text-align:center"><div class="stat-value" style="color:#3b82f6">${smells}</div><div class="stat-label">Code Smells</div></div><div style="text-align:center"><div class="stat-value" style="color:#6b7280">${review.linesOfCode || 0}</div><div class="stat-label">Lines of Code</div></div></div><div class="metrics-grid"><div class="metric-card"><div style="font-size:14px;color:#6b7280;margin-bottom:12px;font-weight:600">🔒 Security</div><div style="font-size:36px;font-weight:700;color:${security.score>=80?'#10b981':security.score>=60?'#f59e0b':'#ef4444'};margin-bottom:8px">${security.rating}</div><div class="bar-container"><div class="bar-fill" style="width:${security.score}%;background:${security.score>=80?'#10b981':security.score>=60?'#f59e0b':'#ef4444'}">${security.score}/100</div></div></div><div class="metric-card"><div style="font-size:14px;color:#6b7280;margin-bottom:12px;font-weight:600">🧹 Maintainability</div><div style="font-size:36px;font-weight:700;color:${maintainability.score>=80?'#10b981':maintainability.score>=60?'#f59e0b':'#ef4444'};margin-bottom:8px">${maintainability.rating}</div><div class="bar-container"><div class="bar-fill" style="width:${maintainability.score}%;background:${maintainability.score>=80?'#10b981':maintainability.score>=60?'#f59e0b':'#ef4444'}">${maintainability.score}/100</div></div></div><div class="metric-card"><div style="font-size:14px;color:#6b7280;margin-bottom:12px;font-weight:600">⚡ Performance</div><div style="font-size:36px;font-weight:700;color:${performance.score>=80?'#10b981':performance.score>=60?'#f59e0b':'#ef4444'};margin-bottom:8px">${performance.rating}</div><div class="bar-container"><div class="bar-fill" style="width:${performance.score}%;background:${performance.score>=80?'#10b981':performance.score>=60?'#f59e0b':'#ef4444'}">${performance.score}/100</div></div></div></div>${hasIssues ? `${criticalIssues.length > 0 ? `<div class="section"><h2><span style="color:#ef4444">🚨</span> Critical Issues (${criticalIssues.length})</h2>${criticalIssues.map(issue => `<div class="issue-card critical"><div style="margin-bottom:8px"><span class="badge critical">${issue.severity}</span> ${issue.category ? `<span class="badge" style="background:#6b7280;color:#fff">${issue.category}</span>` : ''} ${issue.cwe ? `<span class="badge" style="background:#dc2626;color:#fff">${issue.cwe}</span>` : ''}</div><div class="issue-title">${issue.title || 'Critical Issue'}</div><div class="issue-location">📍 ${issue.file || 'Unknown'}${issue.line ? ':' + issue.line : ''}</div><div class="issue-description">${issue.description || 'No description'}</div>${issue.fix ? `<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">${issue.fix}</div></div>` : ''}</div>`).join('')}</div>` : ''}${majorIssues.length > 0 ? `<div class="section"><h2><span style="color:#f59e0b">⚠️</span> Major Issues (${majorIssues.length})</h2>${majorIssues.slice(0, 5).map(issue => `<div class="issue-card major"><div style="margin-bottom:8px"><span class="badge major">${issue.severity}</span> ${issue.category ? `<span class="badge" style="background:#6b7280;color:#fff">${issue.category}</span>` : ''}</div><div class="issue-title">${issue.title || 'Major Issue'}</div><div class="issue-location">📍 ${issue.file || 'Unknown'}${issue.line ? ':' + issue.line : ''}</div><div class="issue-description">${issue.description || 'No description'}</div>${issue.fix ? `<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">${issue.fix}</div></div>` : ''}</div>`).join('')}${majorIssues.length > 5 ? `<p style="text-align:center;color:#6b7280;font-size:13px">...and ${majorIssues.length - 5} more major issues</p>` : ''}</div>` : ''}${minorIssues.length > 0 ? `<div class="section"><h2><span style="color:#3b82f6">ℹ️</span> Minor Issues (${minorIssues.length})</h2>${minorIssues.slice(0, 3).map(issue => `<div class="issue-card minor"><div style="margin-bottom:8px"><span class="badge minor">${issue.severity}</span> ${issue.category ? `<span class="badge" style="background:#6b7280;color:#fff">${issue.category}</span>` : ''}</div><div class="issue-title">${issue.title || 'Minor Issue'}</div><div class="issue-location">📍 ${issue.file || 'Unknown'}${issue.line ? ':' + issue.line : ''}</div><div class="issue-description">${issue.description || 'No description'}</div>${issue.fix ? `<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">${issue.fix}</div></div>` : ''}</div>`).join('')}${minorIssues.length > 3 ? `<p style="text-align:center;color:#6b7280;font-size:13px">...and ${minorIssues.length - 3} more minor issues</p>` : ''}</div>` : ''}` : `<div class="section"><div class="congratulations"><h3>🎉 Excellent! No Issues Found</h3><p><strong>Congratulations!</strong> Your code passes all AI quality checks with flying colors. No security vulnerabilities, code smells, or performance issues detected. Keep up the great work! 🚀</p><p style="margin-top:12px;font-size:13px">Your code demonstrates best practices in security, maintainability, and performance.</p></div></div>`}${(review.recommendations||[]).length > 0 ? `<div class="section"><h2>💡 AI Recommendations</h2>${review.recommendations.slice(0,5).map((rec, i) => `<div style="background:#f9fafb;border-left:3px solid #8b5cf6;border-radius:6px;padding:12px;margin-bottom:8px"><span style="color:#8b5cf6;font-weight:700;margin-right:8px">${i+1}.</span>${rec}</div>`).join('')}</div>` : ''}<div class="footer"><p><strong>🤖 SonarQube AI Agent</strong> — Powered by Claude Sonnet 4.5 (Anthropic)</p><p style="margin-top:8px">Generated on ${new Date().toLocaleString('en-IN', {dateStyle:'medium',timeStyle:'short'})}</p><p style="margin-top:4px;font-size:11px">Technical Debt: ${metrics.technicalDebt || '0h'} • Total Issues: ${metrics.totalIssues || 0}</p></div></div></body></html>`;
+  // Secrets Found
+  const secretsFound = review.secretsFound || { detected: false, count: 0, secrets: [] };
+  const totalCodeLines = review.totalCodeLines || review.linesOfCode || 0;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:'Segoe UI',sans-serif;background:#f4f7fa;padding:20px;margin:0;color:#1f2937}.container{max-width:800px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)}.header{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;padding:40px 32px;text-align:center}.header h1{margin:0 0 8px;font-size:28px;font-weight:700}.header p{margin:0;opacity:0.95;font-size:15px}.score-section{background:#f9fafb;padding:32px;text-align:center;border-bottom:1px solid #e5e7eb}.score-circle{width:140px;height:140px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:700;border:8px solid}.stats-row{display:flex;justify-content:space-around;padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}.stat-value{font-size:28px;font-weight:700;font-family:monospace;margin-bottom:4px}.stat-label{font-size:12px;color:#6b7280;font-weight:600}.metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:32px}.metric-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-align:center}.bar-container{background:#f3f4f6;border-radius:8px;height:32px;overflow:hidden;margin:8px 0}.bar-fill{height:100%;display:flex;align-items:center;padding:0 12px;color:#fff;font-weight:700;font-size:13px}.section{padding:32px;border-top:1px solid #e5e7eb}.section h2{margin:0 0 20px;color:#111827;font-size:20px;font-weight:700}.issue-card{background:#f9fafb;border-left:4px solid;border-radius:8px;padding:16px;margin-bottom:12px}.issue-card.critical{border-color:#ef4444;background:rgba(239,68,68,0.05)}.issue-card.major{border-color:#f59e0b;background:rgba(245,158,11,0.05)}.issue-card.minor{border-color:#3b82f6;background:rgba(59,130,246,0.05)}.badge{padding:4px 10px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase}.badge.critical{background:#ef4444;color:#fff}.badge.major{background:#f59e0b;color:#fff}.badge.minor{background:#3b82f6;color:#fff}.issue-title{font-size:15px;font-weight:700;color:#111827;margin:8px 0}.issue-location{font-size:12px;color:#6b7280;margin-bottom:8px;font-family:monospace}.issue-description{font-size:13px;color:#374151;line-height:1.6;margin-bottom:12px}.fix-box{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:12px;margin-top:8px}.fix-box-title{font-size:12px;font-weight:700;color:#059669;margin-bottom:6px}.fix-box-content{font-size:13px;color:#047857;line-height:1.6}.congratulations{background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.1));border:2px solid #10b981;border-radius:12px;padding:24px;text-align:center}.congratulations h3{margin:0 0 12px;color:#059669;font-size:22px}.congratulations p{margin:0;color:#047857;font-size:14px;line-height:1.6}.footer{background:#f9fafb;padding:24px 32px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}</style></head><body><div class="container"><div class="header"><h1>${scoreEmoji} AI Code Review Report</h1><p><strong>Repository:</strong> ${repoName} • <strong>Branch:</strong> ${branch}</p><p style="font-size:13px;margin-top:8px;opacity:0.9">Analyzed by Claude Sonnet 4.5 (Anthropic AI)</p></div><div class="score-section"><div class="score-circle" style="border-color:${scoreColor};color:${scoreColor}">${score}</div><div style="font-size:14px;color:#6b7280;margin-top:8px;font-weight:600">OVERALL QUALITY SCORE</div><p style="font-size:13px;color:#6b7280;margin-top:12px">${review.summary || 'Code analysis complete'}</p></div><div class="stats-row"><div style="text-align:center"><div class="stat-value" style="color:#ef4444">${bugs}</div><div class="stat-label">Bugs</div></div><div style="text-align:center"><div class="stat-value" style="color:#3b82f6">${smells}</div><div class="stat-label">Code Smells</div></div><div style="text-align:center"><div class="stat-value" style="color:#6b7280">${totalCodeLines}</div><div class="stat-label">Total Code Lines</div></div><div style="text-align:center"><div class="stat-value" style="color:${secretsFound.detected ? '#dc2626' : '#10b981'}">${secretsFound.detected ? secretsFound.count : '✓'}</div><div class="stat-label">${secretsFound.detected ? 'Secrets Found' : 'No Secrets'}</div></div></div><div class="metrics-grid"><div class="metric-card"><div style="font-size:14px;color:#6b7280;margin-bottom:12px;font-weight:600">🔒 Security</div><div style="font-size:36px;font-weight:700;color:${security.score>=80?'#10b981':security.score>=60?'#f59e0b':'#ef4444'};margin-bottom:8px">${security.rating}</div><div class="bar-container"><div class="bar-fill" style="width:${security.score}%;background:${security.score>=80?'#10b981':security.score>=60?'#f59e0b':'#ef4444'}">${security.score}/100</div></div></div><div class="metric-card"><div style="font-size:14px;color:#6b7280;margin-bottom:12px;font-weight:600">🧹 Maintainability</div><div style="font-size:36px;font-weight:700;color:${maintainability.score>=80?'#10b981':maintainability.score>=60?'#f59e0b':'#ef4444'};margin-bottom:8px">${maintainability.rating}</div><div class="bar-container"><div class="bar-fill" style="width:${maintainability.score}%;background:${maintainability.score>=80?'#10b981':maintainability.score>=60?'#f59e0b':'#ef4444'}">${maintainability.score}/100</div></div></div><div class="metric-card"><div style="font-size:14px;color:#6b7280;margin-bottom:12px;font-weight:600">⚡ Performance</div><div style="font-size:36px;font-weight:700;color:${performance.score>=80?'#10b981':performance.score>=60?'#f59e0b':'#ef4444'};margin-bottom:8px">${performance.rating}</div><div class="bar-container"><div class="bar-fill" style="width:${performance.score}%;background:${performance.score>=80?'#10b981':performance.score>=60?'#f59e0b':'#ef4444'}">${performance.score}/100</div></div></div></div><div class="section" style="background:${secretsFound.detected ? 'rgba(239,68,68,0.05)' : 'rgba(16,185,129,0.05)'};border:2px solid ${secretsFound.detected ? '#ef4444' : '#10b981'};border-radius:12px;margin:32px"><h2><span style="color:${secretsFound.detected ? '#dc2626' : '#059669'}">${secretsFound.detected ? '🔐' : '✅'}</span> Secrets Scan ${secretsFound.detected ? '— Found ' + secretsFound.count : '— Clean'}</h2>${secretsFound.detected ? `<p style="color:#dc2626;font-weight:600;margin-bottom:16px">⚠️ Warning: ${secretsFound.count} potential secret(s) detected in your code (.env files excluded)</p>${secretsFound.secrets.map(secret => `<div class="issue-card critical"><div style="margin-bottom:8px"><span class="badge critical">${secret.severity}</span> <span class="badge" style="background:#dc2626;color:#fff">${secret.type}</span></div><div class="issue-title">🔑 ${secret.type} Detected</div><div class="issue-location">📍 ${secret.file}${secret.line ? ':' + secret.line : ''}</div><div class="issue-description">${secret.description}</div>${secret.pattern ? `<div style="background:rgba(0,0,0,0.05);border-radius:6px;padding:8px;margin-top:8px;font-family:monospace;font-size:12px;color:#374151">${secret.pattern}</div>` : ''}<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">Move this credential to environment variables (.env file) and use process.env to access it. Never commit secrets to version control.</div></div></div>`).join('')}` : `<div style="text-align:center;padding:20px"><p style="color:#059669;font-size:15px;font-weight:600">✅ No hardcoded secrets, passwords, or API keys detected</p><p style="color:#047857;font-size:13px;margin-top:8px">Your code is clean! No sensitive credentials found in the scanned files (.env files are excluded from scan).</p></div>`}</div>${hasIssues ? `${criticalIssues.length > 0 ? `<div class="section"><h2><span style="color:#ef4444">🚨</span> Critical Issues (${criticalIssues.length})</h2>${criticalIssues.map(issue => `<div class="issue-card critical"><div style="margin-bottom:8px"><span class="badge critical">${issue.severity}</span> ${issue.category ? `<span class="badge" style="background:#6b7280;color:#fff">${issue.category}</span>` : ''} ${issue.cwe ? `<span class="badge" style="background:#dc2626;color:#fff">${issue.cwe}</span>` : ''}</div><div class="issue-title">${issue.title || 'Critical Issue'}</div><div class="issue-location">📍 ${issue.file || 'Unknown'}${issue.line ? ':' + issue.line : ''}</div><div class="issue-description">${issue.description || 'No description'}</div>${issue.fix ? `<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">${issue.fix}</div></div>` : ''}</div>`).join('')}</div>` : ''}${majorIssues.length > 0 ? `<div class="section"><h2><span style="color:#f59e0b">⚠️</span> Major Issues (${majorIssues.length})</h2>${majorIssues.slice(0, 5).map(issue => `<div class="issue-card major"><div style="margin-bottom:8px"><span class="badge major">${issue.severity}</span> ${issue.category ? `<span class="badge" style="background:#6b7280;color:#fff">${issue.category}</span>` : ''}</div><div class="issue-title">${issue.title || 'Major Issue'}</div><div class="issue-location">📍 ${issue.file || 'Unknown'}${issue.line ? ':' + issue.line : ''}</div><div class="issue-description">${issue.description || 'No description'}</div>${issue.fix ? `<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">${issue.fix}</div></div>` : ''}</div>`).join('')}${majorIssues.length > 5 ? `<p style="text-align:center;color:#6b7280;font-size:13px">...and ${majorIssues.length - 5} more major issues</p>` : ''}</div>` : ''}${minorIssues.length > 0 ? `<div class="section"><h2><span style="color:#3b82f6">ℹ️</span> Minor Issues (${minorIssues.length})</h2>${minorIssues.slice(0, 3).map(issue => `<div class="issue-card minor"><div style="margin-bottom:8px"><span class="badge minor">${issue.severity}</span> ${issue.category ? `<span class="badge" style="background:#6b7280;color:#fff">${issue.category}</span>` : ''}</div><div class="issue-title">${issue.title || 'Minor Issue'}</div><div class="issue-location">📍 ${issue.file || 'Unknown'}${issue.line ? ':' + issue.line : ''}</div><div class="issue-description">${issue.description || 'No description'}</div>${issue.fix ? `<div class="fix-box"><div class="fix-box-title">💡 Recommended Fix:</div><div class="fix-box-content">${issue.fix}</div></div>` : ''}</div>`).join('')}${minorIssues.length > 3 ? `<p style="text-align:center;color:#6b7280;font-size:13px">...and ${minorIssues.length - 3} more minor issues</p>` : ''}</div>` : ''}` : `<div class="section"><div class="congratulations"><h3>🎉 Excellent! No Issues Found</h3><p><strong>Congratulations!</strong> Your code passes all AI quality checks with flying colors. No security vulnerabilities, code smells, or performance issues detected. Keep up the great work! 🚀</p><p style="margin-top:12px;font-size:13px">Your code demonstrates best practices in security, maintainability, and performance.</p></div></div>`}${(review.recommendations||[]).length > 0 ? `<div class="section"><h2>💡 AI Recommendations</h2>${review.recommendations.slice(0,5).map((rec, i) => `<div style="background:#f9fafb;border-left:3px solid #8b5cf6;border-radius:6px;padding:12px;margin-bottom:8px"><span style="color:#8b5cf6;font-weight:700;margin-right:8px">${i+1}.</span>${rec}</div>`).join('')}</div>` : ''}<div class="footer"><p><strong>🤖 SonarQube AI Agent</strong> — Powered by Claude Sonnet 4.5 (Anthropic)</p><p style="margin-top:8px">Generated on ${new Date().toLocaleString('en-IN', {dateStyle:'medium',timeStyle:'short'})}</p><p style="margin-top:4px;font-size:11px">Technical Debt: ${metrics.technicalDebt || '0h'} • Total Issues: ${metrics.totalIssues || 0}</p></div></div></body></html>`;
 }
 
 // ─── SONARQUBE REPORT FETCHER ─────────────────────────────────────────────────
@@ -461,6 +465,9 @@ io.on('connection', (socket) => {
 
     try {
       let codeSnippet = '';
+      let totalCodeLines = 0;
+      let analyzedFiles = [];
+
       try {
         // Try to get recently changed files
         const changed = await gitExec(['diff', 'HEAD~1', '--name-only'], repoPath);
@@ -471,7 +478,12 @@ io.on('connection', (socket) => {
 
         for (const f of codeFiles) {
           const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
-          if (content) codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 2000)}`;
+          if (content) {
+            const lines = content.split('\n').length;
+            totalCodeLines += lines;
+            analyzedFiles.push({ file: f, lines });
+            codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 2000)}`;
+          }
         }
       } catch (_) {}
 
@@ -483,6 +495,9 @@ io.on('connection', (socket) => {
             .slice(0, 2);
           for (const f of files) {
             const content = fs.readFileSync(path.join(repoPath, f), 'utf8');
+            const lines = content.split('\n').length;
+            totalCodeLines += lines;
+            analyzedFiles.push({ file: f, lines });
             codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 2000)}`;
           }
         } catch (_) {}
@@ -491,7 +506,11 @@ io.on('connection', (socket) => {
       if (!codeSnippet) {
         log('⚠️ No code files found — using demo snippet');
         codeSnippet = `// Demo.cs\npublic class UserService {\n  private string conn = "Server=prod;Password=admin123;";\n  public User GetUser(int id) {\n    var sql = "SELECT * FROM Users WHERE Id=" + id; // SQL injection risk!\n    return db.Query<User>(sql).First();\n  }\n}`;
+        totalCodeLines = 8;
+        analyzedFiles = [{ file: 'Demo.cs', lines: 8 }];
       }
+
+      log(`📊 Total Code Lines: ${totalCodeLines}`);
 
       log('🧠 Calling Claude AI...');
       const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -509,7 +528,22 @@ io.on('connection', (socket) => {
   "summary": "Brief overall assessment",
   "score": number (0-100),
   "linesOfCode": number,
+  "totalCodeLines": number,
   "files": ["list of analyzed files"],
+  "secretsFound": {
+    "detected": boolean,
+    "count": number,
+    "secrets": [
+      {
+        "type": "API Key|Password|Token|Private Key|AWS Key|Database Credential",
+        "file": "filename",
+        "line": number,
+        "severity": "critical|high|medium",
+        "pattern": "masked secret (e.g., ghp_****)",
+        "description": "what was found"
+      }
+    ]
+  },
   "issues": [
     {
       "severity": "critical|major|minor",
@@ -590,20 +624,28 @@ IMPORTANT:
 - Be thorough - check for OWASP Top 10 vulnerabilities
 - Identify code duplications and similar patterns
 - Calculate cyclomatic complexity where possible
-- Look for hardcoded secrets, passwords, API keys
+- SCAN FOR SECRETS: Look for hardcoded secrets, passwords, API keys, tokens, private keys, AWS keys, database credentials
+- For secret scanning: Check patterns like "password=", "api_key=", "token=", "secret=", hardcoded connection strings
+- Ignore .env files for secret scanning (they are configuration files)
+- If NO secrets found, set secretsFound.detected to false and secrets array to empty
 - Check for SQL injection, XSS, insecure deserialization
 - Identify performance issues like N+1 queries, memory leaks
 - Flag code smells like long methods, god classes, duplicate code
+- Count total lines of code analyzed
 - Provide specific line numbers when possible`,
           messages: [{ role: 'user', content: `Perform comprehensive code review for branch "${branch}" in repository "${repoName}".
 
+Total Code Lines: ${totalCodeLines}
+Analyzed Files: ${analyzedFiles.map(f => `${f.file} (${f.lines} lines)`).join(', ')}
+
 Analyze for:
 1. Security vulnerabilities (OWASP Top 10)
-2. Code quality issues
-3. Performance bottlenecks
-4. Code duplications
-5. Maintainability concerns
-6. Cyclomatic complexity
+2. SECRETS SCANNING - Check for hardcoded passwords, API keys, tokens, credentials (EXCLUDE .env files)
+3. Code quality issues
+4. Performance bottlenecks
+5. Code duplications
+6. Maintainability concerns
+7. Cyclomatic complexity
 
 Code to analyze:
 ${codeSnippet}` }]
@@ -617,7 +659,8 @@ ${codeSnippet}` }]
         review = JSON.parse(raw.replace(/```json|```/g, '').trim());
       } catch {
         review = {
-          summary: 'Review complete (parse error)', score: 75, linesOfCode: 0, files: [],
+          summary: 'Review complete (parse error)', score: 75, linesOfCode: 0, totalCodeLines: totalCodeLines, files: [],
+          secretsFound: { detected: false, count: 0, secrets: [] },
           issues: [], security: { rating: 'B', score: 75, findings: [], vulnerabilities: [] },
           maintainability: { rating: 'B', score: 75, findings: [], codeSmells: [] },
           performance: { rating: 'B', score: 75, findings: [], bottlenecks: [] },
@@ -626,6 +669,16 @@ ${codeSnippet}` }]
           recommendations: [],
           metrics: { totalIssues: 0, critical: 0, major: 0, minor: 0, technicalDebt: '0h' }
         };
+      }
+
+      // Ensure secretsFound exists (for backward compatibility)
+      if (!review.secretsFound) {
+        review.secretsFound = { detected: false, count: 0, secrets: [] };
+      }
+
+      // Ensure totalCodeLines is set
+      if (!review.totalCodeLines) {
+        review.totalCodeLines = totalCodeLines;
       }
 
       socket.emit('review-result', { success: true, branch, repoName, review });

@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-05-06T05:03:00.016Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9→21 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T05:03:00.016Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-05-06T05:16:03.957Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 7→77 lines (5 removed) | Also: to: NOTIFY_EMAIL, subject: `❌ Sonar FAILED — ${rep; html: `<h2>❌ Scan Failed</h2>",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T05:16:20.251Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-05-06T05:19:03.136Z",
+      "error_message": "Significant refactor of ",
+      "file": "README.md",
+      "root_cause": "63 lines replaced/restructured",
+      "fix": "Rewrote 105→364 lines (63 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T05:19:03.136Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-05-06T05:42:27.885Z",
+      "error_message": "Significant refactor of ",
+      "file": "test-setup.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 10→19 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T05:42:27.885Z"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-05-06T06:22:48.845Z",
+      "error_message": "Wrong operator: || should be ===",
+      "file": "server.js",
+      "root_cause": "Used \"||\" instead of \"===\"",
+      "fix": "Changed operator || → ===",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T06:22:48.845Z"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-05-06T06:27:37.544Z",
+      "error_message": "Missing guard clause",
+      "file": "server.js",
+      "root_cause": "No early return/throw for edge case: err",
+      "fix": "Added guard clause: if (err)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T06:27:37.544Z"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-05-06T06:28:12.821Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 21→134 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T06:28:12.821Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-05-06T06:29:09.457Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/index.html",
+      "root_cause": "38 lines replaced/restructured",
+      "fix": "Rewrote 64→178 lines (38 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T06:29:09.457Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-05-06T06:39:57.208Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "17 lines replaced/restructured",
+      "fix": "Rewrote 41→84 lines (17 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T06:39:57.208Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-06T07:02:58.156Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T07:02:58.156Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-06T07:29:43.095Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/index.html",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 14→29 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T07:29:43.095Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-05-06T07:37:21.399Z",
+      "error_message": "Significant refactor of ",
+      "file": "public/index.html",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 15→70 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T07:37:21.399Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-05-06T09:08:47.036Z",
+      "error_message": "Wrong reference: 420px should be 650px",
+      "file": "public/index.html",
+      "root_cause": "Used \"420px\" instead of \"650px\"",
+      "fix": "Changed 420px → 650px",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T09:08:47.037Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-05-06T09:10:26.034Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "37 lines replaced/restructured",
+      "fix": "Rewrote 77→134 lines (37 removed) | Also: subject: `❌ SonarQube Scan FAILED — ${repoName}@${; body{font-family:Arial,sans-serif;background:#f4f4",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T09:11:11.849Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-05-06T09:20:19.099Z",
+      "error_message": "Wrong reference: 650px should be 850px",
+      "file": "public/index.html",
+      "root_cause": "Used \"650px\" instead of \"850px\"",
+      "fix": "Changed 650px → 850px",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T09:20:19.099Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-05-06T09:42:56.328Z",
+      "error_message": "Wrong reference: 020810 should be 1f2937",
+      "file": "public/index.html",
+      "root_cause": "Used \"020810\" instead of \"1f2937\"",
+      "fix": "Changed 020810 → 1f2937",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T09:42:56.328Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-05-06T10:46:53.728Z",
+      "error_message": "Missing await",
+      "file": "server.js",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T10:46:53.728Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-05-07T04:57:19.811Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 12→16 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T04:57:19.811Z"
+    }
+  ]
+}
