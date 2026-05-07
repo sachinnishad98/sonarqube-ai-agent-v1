@@ -320,6 +320,38 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-07T05:31:21.914Z"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-05-07T05:43:10.327Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→9 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T05:43:10.327Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-05-07T05:44:19.891Z",
+      "error_message": "Null/undefined access in ",
+      "file": "public/index.html",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T05:44:19.891Z"
     }
   ]
 }

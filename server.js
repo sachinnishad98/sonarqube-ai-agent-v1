@@ -467,6 +467,7 @@ io.on('connection', (socket) => {
       let codeSnippet = '';
       let totalCodeLines = 0;
       let analyzedFiles = [];
+      let languagesDetected = {}; // Track languages: { 'JavaScript': 5, 'Python': 2 }
 
       // Function to recursively scan directory for code files
       function scanDirectory(dir, fileList = [], depth = 0, maxDepth = 3) {
@@ -484,8 +485,14 @@ io.on('connection', (socket) => {
               const stat = fs.statSync(fullPath);
               if (stat.isDirectory()) {
                 scanDirectory(fullPath, fileList, depth + 1, maxDepth);
-              } else if (stat.isFile() && (file.endsWith('.cs') || file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.java') || file.endsWith('.py'))) {
-                fileList.push({ path: fullPath, relative: relativePath });
+              } else if (stat.isFile() && (file.endsWith('.cs') || file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.java') || file.endsWith('.py') || file.endsWith('.go') || file.endsWith('.rb') || file.endsWith('.php') || file.endsWith('.cpp') || file.endsWith('.c'))) {
+                const ext = file.split('.').pop();
+                const lang = {
+                  'cs': 'C#', 'js': 'JavaScript', 'ts': 'TypeScript', 'java': 'Java',
+                  'py': 'Python', 'go': 'Go', 'rb': 'Ruby', 'php': 'PHP',
+                  'cpp': 'C++', 'c': 'C'
+                }[ext] || 'Unknown';
+                fileList.push({ path: fullPath, relative: relativePath, language: lang });
               }
             } catch (_) {}
           }
@@ -505,8 +512,11 @@ io.on('connection', (socket) => {
             const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
             if (content && content.trim()) {
               const lines = content.split('\n').length;
+              const ext = f.split('.').pop();
+              const lang = { 'cs': 'C#', 'js': 'JavaScript', 'ts': 'TypeScript', 'java': 'Java', 'py': 'Python', 'go': 'Go', 'rb': 'Ruby', 'php': 'PHP', 'cpp': 'C++', 'c': 'C' }[ext] || 'Unknown';
+              languagesDetected[lang] = (languagesDetected[lang] || 0) + 1;
               totalCodeLines += lines;
-              analyzedFiles.push({ file: f, lines });
+              analyzedFiles.push({ file: f, lines, language: lang });
               codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 3000)}`;
             }
           }
@@ -525,8 +535,10 @@ io.on('connection', (socket) => {
               const content = fs.readFileSync(fileInfo.path, 'utf8');
               if (content && content.trim()) {
                 const lines = content.split('\n').length;
+                const lang = fileInfo.language || 'Unknown';
+                languagesDetected[lang] = (languagesDetected[lang] || 0) + 1;
                 totalCodeLines += lines;
-                analyzedFiles.push({ file: fileInfo.relative, lines });
+                analyzedFiles.push({ file: fileInfo.relative, lines, language: lang });
                 codeSnippet += `\n\n// FILE: ${fileInfo.relative}\n${content.substring(0, 3000)}`;
               }
             } catch (_) {}
@@ -557,7 +569,8 @@ public class UserService {
   }
 }`;
         totalCodeLines = 15;
-        analyzedFiles = [{ file: 'Demo.cs', lines: 15 }];
+        analyzedFiles = [{ file: 'Demo.cs', lines: 15, language: 'C#' }];
+        languagesDetected['C#'] = 1;
       }
 
       log(`📊 Total Code Lines: ${totalCodeLines} (${analyzedFiles.length} files)`);
@@ -729,6 +742,10 @@ ${codeSnippet}` }]
       // FORCE SET totalCodeLines from actual scan (don't trust AI response)
       review.totalCodeLines = totalCodeLines;
       review.linesOfCode = totalCodeLines;
+
+      // Add programming languages detected
+      review.languagesDetected = languagesDetected;
+      review.primaryLanguage = Object.keys(languagesDetected).sort((a,b) => languagesDetected[b] - languagesDetected[a])[0] || 'Unknown';
 
       // Add analyzed files info
       if (!review.files || review.files.length === 0) {

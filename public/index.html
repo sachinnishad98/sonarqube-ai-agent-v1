@@ -806,6 +806,54 @@ socket.on('review-result', ({ success, review, error }) => {
         `).join('')}
       </div>
 
+      <!-- PROGRAMMING LANGUAGES BLOCK -->
+      ${(() => {
+        const languages = review.languagesDetected || {};
+        const langEntries = Object.entries(languages).sort((a,b) => b[1] - a[1]);
+        const primaryLang = review.primaryLanguage || langEntries[0]?.[0] || 'Unknown';
+        const totalFiles = Object.values(languages).reduce((a,b) => a+b, 0);
+
+        const langIcons = {
+          'JavaScript': '🟨', 'TypeScript': '🔷', 'Python': '🐍', 'Java': '☕',
+          'C#': '🟦', 'Go': '🐹', 'Ruby': '💎', 'PHP': '🐘', 'C++': '⚙️', 'C': '🔧'
+        };
+
+        return `
+          <div style="background:linear-gradient(135deg,rgba(139,92,246,.1),rgba(99,102,241,.1));border:2px solid #8b5cf6;border-radius:12px;padding:14px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <span style="font-size:20px">💻</span>
+              <div style="font-size:12px;font-weight:700;color:#7c3aed">PROGRAMMING LANGUAGES</div>
+              <div style="margin-left:auto;background:#8b5cf6;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
+                ${langEntries.length} ${langEntries.length === 1 ? 'LANGUAGE' : 'LANGUAGES'}
+              </div>
+            </div>
+            ${langEntries.length > 0 ? `
+              <div style="background:rgba(255,255,255,.9);border-radius:8px;padding:12px">
+                <div style="font-size:11px;color:#6b7280;margin-bottom:8px;font-weight:600">
+                  Primary Language: <span style="color:#7c3aed;font-weight:700">${langIcons[primaryLang] || '📝'} ${primaryLang}</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
+                  ${langEntries.map(([lang, count]) => `
+                    <div style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:8px;text-align:center">
+                      <div style="font-size:16px;margin-bottom:2px">${langIcons[lang] || '📝'}</div>
+                      <div style="font-size:11px;font-weight:700;color:#7c3aed">${escHtml(lang)}</div>
+                      <div style="font-size:9px;color:#6b7280;margin-top:2px">${count} ${count === 1 ? 'file' : 'files'}</div>
+                    </div>
+                  `).join('')}
+                </div>
+                <div style="font-size:9px;color:#6b7280;margin-top:8px;text-align:center">
+                  Total ${totalFiles} source ${totalFiles === 1 ? 'file' : 'files'} analyzed
+                </div>
+              </div>
+            ` : `
+              <div style="text-align:center;padding:12px">
+                <div style="font-size:11px;color:#6b7280">No programming languages detected</div>
+              </div>
+            `}
+          </div>
+        `;
+      })()}
+
       <!-- SECRETS/KEYS SCAN BLOCK -->
       ${(() => {
         const secretsFound = review.secretsFound || { detected: false, count: 0, secrets: [] };
