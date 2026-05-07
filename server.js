@@ -468,49 +468,99 @@ io.on('connection', (socket) => {
       let totalCodeLines = 0;
       let analyzedFiles = [];
 
-      try {
-        // Try to get recently changed files
-        const changed = await gitExec(['diff', 'HEAD~1', '--name-only'], repoPath);
-        // Support both .cs (C#) and .js/.ts files
-        const codeFiles = changed.split('\n')
-          .filter(f => (f.endsWith('.cs') || f.endsWith('.js') || f.endsWith('.ts')) && !f.includes('..'))
-          .slice(0, 3);
+      // Function to recursively scan directory for code files
+      function scanDirectory(dir, fileList = [], depth = 0, maxDepth = 3) {
+        if (depth > maxDepth) return fileList;
+        try {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            const fullPath = path.join(dir, file);
+            const relativePath = fullPath.replace(repoPath, '').replace(/^[\\\/]/, '');
 
-        for (const f of codeFiles) {
-          const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
-          if (content) {
-            const lines = content.split('\n').length;
-            totalCodeLines += lines;
-            analyzedFiles.push({ file: f, lines });
-            codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 2000)}`;
+            // Skip node_modules, .git, etc
+            if (file === 'node_modules' || file === '.git' || file === '.env' || file.startsWith('.')) continue;
+
+            try {
+              const stat = fs.statSync(fullPath);
+              if (stat.isDirectory()) {
+                scanDirectory(fullPath, fileList, depth + 1, maxDepth);
+              } else if (stat.isFile() && (file.endsWith('.cs') || file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.java') || file.endsWith('.py'))) {
+                fileList.push({ path: fullPath, relative: relativePath });
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+        return fileList;
+      }
+
+      try {
+        // Strategy 1: Try to get recently changed files via git diff
+        const changed = await gitExec(['diff', 'HEAD~1', '--name-only'], repoPath).catch(() => '');
+        if (changed && changed.trim()) {
+          const codeFiles = changed.split('\n')
+            .filter(f => f && (f.endsWith('.cs') || f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.java') || f.endsWith('.py')) && !f.includes('..') && !f.includes('.env'))
+            .slice(0, 5);
+
+          for (const f of codeFiles) {
+            const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
+            if (content && content.trim()) {
+              const lines = content.split('\n').length;
+              totalCodeLines += lines;
+              analyzedFiles.push({ file: f, lines });
+              codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 3000)}`;
+            }
           }
         }
       } catch (_) {}
 
-      // Fallback: read any .cs or .js files from repo root
+      // Strategy 2: If no git changes found, scan repository directly
       if (!codeSnippet && fs.existsSync(repoPath)) {
+        log('📂 Scanning repository files...');
         try {
-          const files = fs.readdirSync(repoPath)
-            .filter(f => f.endsWith('.cs') || f.endsWith('.js') || f.endsWith('.ts'))
-            .slice(0, 2);
-          for (const f of files) {
-            const content = fs.readFileSync(path.join(repoPath, f), 'utf8');
-            const lines = content.split('\n').length;
-            totalCodeLines += lines;
-            analyzedFiles.push({ file: f, lines });
-            codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 2000)}`;
+          const allFiles = scanDirectory(repoPath);
+          const filesToAnalyze = allFiles.slice(0, 5); // Limit to 5 files
+
+          for (const fileInfo of filesToAnalyze) {
+            try {
+              const content = fs.readFileSync(fileInfo.path, 'utf8');
+              if (content && content.trim()) {
+                const lines = content.split('\n').length;
+                totalCodeLines += lines;
+                analyzedFiles.push({ file: fileInfo.relative, lines });
+                codeSnippet += `\n\n// FILE: ${fileInfo.relative}\n${content.substring(0, 3000)}`;
+              }
+            } catch (_) {}
           }
+
+          log(`✅ Found ${filesToAnalyze.length} files to analyze`);
         } catch (_) {}
       }
 
+      // Strategy 3: Demo snippet if still no code found
       if (!codeSnippet) {
-        log('⚠️ No code files found — using demo snippet');
-        codeSnippet = `// Demo.cs\npublic class UserService {\n  private string conn = "Server=prod;Password=admin123;";\n  public User GetUser(int id) {\n    var sql = "SELECT * FROM Users WHERE Id=" + id; // SQL injection risk!\n    return db.Query<User>(sql).First();\n  }\n}`;
-        totalCodeLines = 8;
-        analyzedFiles = [{ file: 'Demo.cs', lines: 8 }];
+        log('⚠️ No code files found — using demo snippet with intentional security issues');
+        codeSnippet = `// Demo.cs
+public class UserService {
+  private string apiKey = "sk-prod-1234567890abcdef"; // Hardcoded API key
+  private string dbConn = "Server=prod.db.com;Database=main;User=admin;Password=Admin123!;";
+
+  public User GetUser(int id) {
+    var sql = "SELECT * FROM Users WHERE Id=" + id; // SQL injection risk!
+    return db.Query<User>(sql).First();
+  }
+
+  public void SendEmail(string token) {
+    var githubToken = "ghp_aB3dEf7H9jK1mN4pQ6rS8tU0vW2xY5zA"; // GitHub token
+    // AWS credentials hardcoded
+    var awsKey = "AKIAIOSFODNN7EXAMPLE";
+    var awsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+  }
+}`;
+        totalCodeLines = 15;
+        analyzedFiles = [{ file: 'Demo.cs', lines: 15 }];
       }
 
-      log(`📊 Total Code Lines: ${totalCodeLines}`);
+      log(`📊 Total Code Lines: ${totalCodeLines} (${analyzedFiles.length} files)`);
 
       log('🧠 Calling Claude AI...');
       const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
