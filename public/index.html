@@ -806,6 +806,78 @@ socket.on('review-result', ({ success, review, error }) => {
         `).join('')}
       </div>
 
+      <!-- SECRETS/KEYS SCAN BLOCK -->
+      ${(() => {
+        const secretsFound = review.secretsFound || { detected: false, count: 0, secrets: [] };
+        const hasSecrets = secretsFound.detected && secretsFound.secrets && secretsFound.secrets.length > 0;
+
+        if (hasSecrets) {
+          // SECRETS FOUND - Show red warning block
+          return `
+            <div style="background:rgba(220,38,38,.08);border:2px solid #dc2626;border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <span style="font-size:20px">🔐</span>
+                <div style="font-size:12px;font-weight:700;color:#dc2626">SECRETS / KEYS DETECTED</div>
+                <div style="margin-left:auto;background:#dc2626;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
+                  ${secretsFound.count} FOUND
+                </div>
+              </div>
+              <div style="font-size:10px;color:#991b1b;margin-bottom:10px;font-weight:600">
+                ⚠️ Warning: Hardcoded secrets detected in your code (.env files excluded from scan)
+              </div>
+              ${secretsFound.secrets.slice(0, 5).map(secret => `
+                <div style="background:rgba(255,255,255,.9);border-left:4px solid #dc2626;border-radius:6px;padding:10px;margin-bottom:8px">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <span class="badge badge-critical">${secret.severity || 'critical'}</span>
+                    <span style="font-size:11px;font-weight:700;color:#991b1b">🔑 ${escHtml(secret.type || 'Secret')}</span>
+                  </div>
+                  <div style="font-size:10px;color:#6b7280;margin-bottom:4px">📍 ${escHtml(secret.file || 'Unknown')}${secret.line ? ':' + secret.line : ''}</div>
+                  <div style="font-size:10px;color:#374151;margin-bottom:6px">${escHtml(secret.description || 'Hardcoded credential detected')}</div>
+                  ${secret.pattern ? `
+                    <div style="background:rgba(0,0,0,.05);border-radius:4px;padding:6px;font-family:monospace;font-size:9px;color:#374151;margin-bottom:6px;word-break:break-all">
+                      ${escHtml(secret.pattern)}
+                    </div>
+                  ` : ''}
+                  <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;padding:8px;margin-top:6px">
+                    <div style="font-size:9px;font-weight:700;color:#059669;margin-bottom:3px">💡 Recommended Fix:</div>
+                    <div style="font-size:9px;color:#047857;line-height:1.4">
+                      Move this credential to environment variables (.env file) and use process.env to access it. Never commit secrets to version control.
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+              ${secretsFound.count > 5 ? `
+                <div style="text-align:center;font-size:10px;color:#991b1b;margin-top:8px">
+                  ...and ${secretsFound.count - 5} more secret(s) detected
+                </div>
+              ` : ''}
+            </div>
+          `;
+        } else {
+          // NO SECRETS - Show green success block
+          return `
+            <div style="background:rgba(16,185,129,.08);border:2px solid #10b981;border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <span style="font-size:20px">✅</span>
+                <div style="font-size:12px;font-weight:700;color:#059669">SECRETS / KEYS SCAN</div>
+                <div style="margin-left:auto;background:#10b981;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
+                  CLEAN
+                </div>
+              </div>
+              <div style="text-align:center;padding:12px">
+                <div style="font-size:13px;font-weight:600;color:#059669;margin-bottom:6px">
+                  ✅ No hardcoded secrets, passwords, or API keys detected
+                </div>
+                <div style="font-size:10px;color:#047857;line-height:1.5">
+                  Your code is secure! No sensitive credentials found in the scanned files.<br>
+                  <span style="font-size:9px;color:#6b7280">(.env files are excluded from scan)</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      })()}
+
       <!-- SECURITY VULNERABILITIES -->
       ${security.vulnerabilities && security.vulnerabilities.length > 0 ? `
         <div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px;margin-bottom:12px">

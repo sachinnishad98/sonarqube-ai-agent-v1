@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T05:31:47.415Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T05:36:43.787Z
 > Files: 32 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
@@ -63,4 +63,4 @@
 
 ## public/
 
-- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~19460 tok)
+- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~20672 tok)

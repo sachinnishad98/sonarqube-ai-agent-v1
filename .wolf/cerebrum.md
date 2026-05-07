@@ -29,6 +29,10 @@
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 
+- **[2026-05-07] Don't trust AI response for totalCodeLines** — AI sometimes returns 0 or undefined for totalCodeLines. Always FORCE SET from actual scan result: `review.totalCodeLines = totalCodeLines` (the variable we calculated). Never rely solely on AI's JSON response for count data.
+
+- **[2026-05-07] Use fallback chains in frontend** — When displaying data from backend, always use fallback chains: `${review.totalCodeLines || review.linesOfCode || 0}` instead of just `${review.linesOfCode}`. This handles backward compatibility and missing fields.
+
 ## Decision Log
 
 <!-- Significant technical decisions with rationale. Why X was chosen over Y. -->
