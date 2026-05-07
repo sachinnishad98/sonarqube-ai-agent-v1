@@ -881,6 +881,7 @@ socket.on('review-result', ({ success, review, error }) => {
         const syntaxCheck = review.syntaxCheck || { passed: true, totalErrors: 0, errors: [] };
         const hasSyntaxErrors = !syntaxCheck.passed && syntaxCheck.errors && syntaxCheck.errors.length > 0;
 
+        // Always show RED block by default, GREEN only if explicitly passed
         if (hasSyntaxErrors) {
           // SYNTAX ERRORS FOUND - Show red warning block
           return `
@@ -918,22 +919,22 @@ socket.on('review-result', ({ success, review, error }) => {
             </div>
           `;
         } else {
-          // SYNTAX OK - Show green success block
+          // DEFAULT - Show RED block with "Checking..." or "OK"
           return `
-            <div style="background:rgba(16,185,129,.08);border:2px solid #10b981;border-radius:12px;padding:14px;margin-bottom:12px">
+            <div style="background:rgba(239,68,68,.08);border:2px solid #ef4444;border-radius:12px;padding:14px;margin-bottom:12px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <span style="font-size:20px">✅</span>
-                <div style="font-size:12px;font-weight:700;color:#059669">SYNTAX CHECK</div>
-                <div style="margin-left:auto;background:#10b981;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
-                  PASSED
+                <span style="font-size:20px">${syntaxCheck.passed ? '✅' : '⏳'}</span>
+                <div style="font-size:12px;font-weight:700;color:#ef4444">SYNTAX CHECK</div>
+                <div style="margin-left:auto;background:#ef4444;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
+                  ${syntaxCheck.passed ? 'OK' : 'CHECKING'}
                 </div>
               </div>
               <div style="text-align:center;padding:10px">
-                <div style="font-size:12px;font-weight:600;color:#059669;margin-bottom:4px">
-                  ✅ All syntax is correct
+                <div style="font-size:12px;font-weight:600;color:#ef4444;margin-bottom:4px">
+                  ${syntaxCheck.passed ? '✅ Syntax OK' : '⏳ Checking syntax...'}
                 </div>
-                <div style="font-size:10px;color:#047857;line-height:1.5">
-                  No syntax errors detected. Your code follows proper language syntax rules.
+                <div style="font-size:10px;color:#991b1b;line-height:1.5">
+                  ${syntaxCheck.passed ? 'No syntax errors detected in analyzed files.' : 'AI is analyzing your code for syntax errors...'}
                 </div>
               </div>
             </div>

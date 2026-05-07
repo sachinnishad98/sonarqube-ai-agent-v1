@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T05:51:25.741Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T05:54:56.786Z
 > Files: 32 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
@@ -14,7 +14,7 @@
 - `package-lock.json` — npm lock file (~14614 tok)
 - `package.json` — Node.js package manifest (~128 tok)
 - `README.md` — Project documentation (~2111 tok)
-- `server.js` — SonarAI v3.0 — GitHub + Local SonarQube Version (~20235 tok)
+- `server.js` — SonarAI v3.0 — GitHub + Local SonarQube Version (~20307 tok)
 - `server.log` (~84 tok)
 - `SETUP_GUIDE.md` — 🚀 SonarAI Agent — Complete Setup Guide (~2035 tok)
 - `sonar-project.properties` — ,coverage/**,dist/**,build/**,.git/**,.claude/**,.wolf/**,**/*.test.js,**/*.spec.js (~134 tok)
@@ -63,4 +63,4 @@
 
 ## public/
 
-- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~22885 tok)
+- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~22950 tok)

@@ -531,8 +531,8 @@ io.on('connection', (socket) => {
         const changed = await gitExec(['diff', 'HEAD~1', '--name-only'], repoPath).catch(() => '');
         if (changed && changed.trim()) {
           const codeFiles = changed.split('\n')
-            .filter(f => f && (f.endsWith('.cs') || f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.java') || f.endsWith('.py')) && !f.includes('..') && !f.includes('.env'))
-            .slice(0, 5);
+            .filter(f => f && (f.endsWith('.cs') || f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.java') || f.endsWith('.py') || f.endsWith('.html') || f.endsWith('.css') || f.endsWith('.scss') || f.endsWith('.jsx') || f.endsWith('.tsx') || f.endsWith('.vue')) && !f.includes('..') && !f.includes('.env'))
+            .slice(0, 8);
 
           for (const f of codeFiles) {
             const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
@@ -545,7 +545,9 @@ io.on('connection', (socket) => {
                 'rb': { name: 'Ruby', type: 'backend' }, 'php': { name: 'PHP', type: 'backend' },
                 'js': { name: 'JavaScript', type: 'backend' }, 'ts': { name: 'TypeScript', type: 'backend' },
                 'html': { name: 'HTML', type: 'frontend' }, 'css': { name: 'CSS', type: 'frontend' },
-                'jsx': { name: 'React JSX', type: 'frontend' }, 'tsx': { name: 'React TSX', type: 'frontend' }
+                'scss': { name: 'SCSS', type: 'frontend' },
+                'jsx': { name: 'React JSX', type: 'frontend' }, 'tsx': { name: 'React TSX', type: 'frontend' },
+                'vue': { name: 'Vue', type: 'frontend' }
               }[ext] || { name: 'Unknown', type: 'backend' };
 
               const langType = langInfo.type;
