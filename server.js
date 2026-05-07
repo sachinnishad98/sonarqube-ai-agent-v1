@@ -605,10 +605,37 @@ public class UserService {
     var awsKey = "AKIAIOSFODNN7EXAMPLE";
     var awsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
   }
+}
+
+// index.html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Demo App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Welcome</h1>
+  <script>
+    var token = "admin_token_123"; // Hardcoded token
+  </script>
+</body>
+</html>
+
+/* style.css */
+body {
+  background: #fff;
+  font-family: Arial;
 }`;
-        totalCodeLines = 15;
-        analyzedFiles = [{ file: 'Demo.cs', lines: 15, language: 'C#', type: 'backend' }];
+        totalCodeLines = 37;
+        analyzedFiles = [
+          { file: 'Demo.cs', lines: 15, language: 'C#', type: 'backend' },
+          { file: 'index.html', lines: 12, language: 'HTML', type: 'frontend' },
+          { file: 'style.css', lines: 4, language: 'CSS', type: 'frontend' }
+        ];
         languagesDetected.backend['C#'] = 1;
+        languagesDetected.frontend['HTML'] = 1;
+        languagesDetected.frontend['CSS'] = 1;
       }
 
       log(`📊 Total Code Lines: ${totalCodeLines} (${analyzedFiles.length} files)`);

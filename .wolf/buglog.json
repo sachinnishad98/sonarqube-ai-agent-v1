@@ -384,6 +384,22 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-07T05:51:04.653Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-05-07T05:59:10.237Z",
+      "error_message": "Significant refactor of ",
+      "file": "server.js",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 24→51 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T05:59:10.237Z"
     }
   ]
 }

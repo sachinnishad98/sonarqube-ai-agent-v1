@@ -832,40 +832,42 @@ socket.on('review-result', ({ success, review, error }) => {
             </div>
             ${totalLangs > 0 ? `
               <div style="background:rgba(255,255,255,.9);border-radius:8px;padding:12px">
-                ${backendEntries.length > 0 ? `
-                  <div style="margin-bottom:${frontendEntries.length > 0 ? '12px' : '0'}">
-                    <div style="font-size:10px;font-weight:700;color:#7c3aed;margin-bottom:6px;display:flex;align-items:center;gap:4px">
-                      <span>⚙️ BACKEND</span>
-                      <span style="font-size:9px;color:#6b7280">(${backendEntries.reduce((sum,[,c])=>sum+c,0)} files)</span>
+                <div style="display:grid;grid-template-columns:${backendEntries.length > 0 && frontendEntries.length > 0 ? '1fr 1fr' : '1fr'};gap:12px">
+                  ${backendEntries.length > 0 ? `
+                    <div>
+                      <div style="font-size:10px;font-weight:700;color:#7c3aed;margin-bottom:8px;display:flex;align-items:center;gap:4px;border-bottom:2px solid rgba(139,92,246,.3);padding-bottom:4px">
+                        <span>⚙️ BACKEND</span>
+                        <span style="font-size:9px;color:#6b7280">(${backendEntries.reduce((sum,[,c])=>sum+c,0)} files)</span>
+                      </div>
+                      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px">
+                        ${backendEntries.map(([lang, count]) => `
+                          <div style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:6px;text-align:center">
+                            <div style="font-size:14px;margin-bottom:2px">${langIcons[lang] || '📝'}</div>
+                            <div style="font-size:10px;font-weight:700;color:#7c3aed">${escHtml(lang)}</div>
+                            <div style="font-size:8px;color:#6b7280;margin-top:1px">${count} file${count > 1 ? 's' : ''}</div>
+                          </div>
+                        `).join('')}
+                      </div>
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px">
-                      ${backendEntries.map(([lang, count]) => `
-                        <div style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:6px;text-align:center">
-                          <div style="font-size:14px;margin-bottom:2px">${langIcons[lang] || '📝'}</div>
-                          <div style="font-size:10px;font-weight:700;color:#7c3aed">${escHtml(lang)}</div>
-                          <div style="font-size:8px;color:#6b7280;margin-top:1px">${count} file${count > 1 ? 's' : ''}</div>
-                        </div>
-                      `).join('')}
+                  ` : ''}
+                  ${frontendEntries.length > 0 ? `
+                    <div>
+                      <div style="font-size:10px;font-weight:700;color:#7c3aed;margin-bottom:8px;display:flex;align-items:center;gap:4px;border-bottom:2px solid rgba(139,92,246,.3);padding-bottom:4px">
+                        <span>🎨 FRONTEND</span>
+                        <span style="font-size:9px;color:#6b7280">(${frontendEntries.reduce((sum,[,c])=>sum+c,0)} files)</span>
+                      </div>
+                      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px">
+                        ${frontendEntries.map(([lang, count]) => `
+                          <div style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:6px;text-align:center">
+                            <div style="font-size:14px;margin-bottom:2px">${langIcons[lang] || '📝'}</div>
+                            <div style="font-size:10px;font-weight:700;color:#7c3aed">${escHtml(lang)}</div>
+                            <div style="font-size:8px;color:#6b7280;margin-top:1px">${count} file${count > 1 ? 's' : ''}</div>
+                          </div>
+                        `).join('')}
+                      </div>
                     </div>
-                  </div>
-                ` : ''}
-                ${frontendEntries.length > 0 ? `
-                  <div>
-                    <div style="font-size:10px;font-weight:700;color:#7c3aed;margin-bottom:6px;display:flex;align-items:center;gap:4px">
-                      <span>🎨 FRONTEND</span>
-                      <span style="font-size:9px;color:#6b7280">(${frontendEntries.reduce((sum,[,c])=>sum+c,0)} files)</span>
-                    </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px">
-                      ${frontendEntries.map(([lang, count]) => `
-                        <div style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:6px;text-align:center">
-                          <div style="font-size:14px;margin-bottom:2px">${langIcons[lang] || '📝'}</div>
-                          <div style="font-size:10px;font-weight:700;color:#7c3aed">${escHtml(lang)}</div>
-                          <div style="font-size:8px;color:#6b7280;margin-top:1px">${count} file${count > 1 ? 's' : ''}</div>
-                        </div>
-                      `).join('')}
-                    </div>
-                  </div>
-                ` : ''}
+                  ` : ''}
+                </div>
               </div>
             ` : `
               <div style="text-align:center;padding:12px">
