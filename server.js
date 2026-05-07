@@ -467,7 +467,8 @@ io.on('connection', (socket) => {
       let codeSnippet = '';
       let totalCodeLines = 0;
       let analyzedFiles = [];
-      let languagesDetected = {}; // Track languages: { 'JavaScript': 5, 'Python': 2 }
+      let languagesDetected = { backend: {}, frontend: {} }; // Separate backend/frontend
+      let syntaxErrors = []; // Track syntax errors
 
       // Function to recursively scan directory for code files
       function scanDirectory(dir, fileList = [], depth = 0, maxDepth = 3) {
@@ -485,14 +486,39 @@ io.on('connection', (socket) => {
               const stat = fs.statSync(fullPath);
               if (stat.isDirectory()) {
                 scanDirectory(fullPath, fileList, depth + 1, maxDepth);
-              } else if (stat.isFile() && (file.endsWith('.cs') || file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.java') || file.endsWith('.py') || file.endsWith('.go') || file.endsWith('.rb') || file.endsWith('.php') || file.endsWith('.cpp') || file.endsWith('.c'))) {
-                const ext = file.split('.').pop();
-                const lang = {
-                  'cs': 'C#', 'js': 'JavaScript', 'ts': 'TypeScript', 'java': 'Java',
-                  'py': 'Python', 'go': 'Go', 'rb': 'Ruby', 'php': 'PHP',
-                  'cpp': 'C++', 'c': 'C'
-                }[ext] || 'Unknown';
-                fileList.push({ path: fullPath, relative: relativePath, language: lang });
+              } else if (stat.isFile()) {
+                const ext = file.split('.').pop().toLowerCase();
+                const langMap = {
+                  // Backend
+                  'cs': { name: 'C#', type: 'backend' },
+                  'java': { name: 'Java', type: 'backend' },
+                  'py': { name: 'Python', type: 'backend' },
+                  'go': { name: 'Go', type: 'backend' },
+                  'rb': { name: 'Ruby', type: 'backend' },
+                  'php': { name: 'PHP', type: 'backend' },
+                  'cpp': { name: 'C++', type: 'backend' },
+                  'c': { name: 'C', type: 'backend' },
+                  // Backend JS/TS (server-side)
+                  'js': { name: 'JavaScript', type: 'backend' },
+                  'ts': { name: 'TypeScript', type: 'backend' },
+                  // Frontend
+                  'html': { name: 'HTML', type: 'frontend' },
+                  'css': { name: 'CSS', type: 'frontend' },
+                  'scss': { name: 'SCSS', type: 'frontend' },
+                  'jsx': { name: 'React JSX', type: 'frontend' },
+                  'tsx': { name: 'React TSX', type: 'frontend' },
+                  'vue': { name: 'Vue', type: 'frontend' }
+                };
+
+                if (langMap[ext]) {
+                  fileList.push({
+                    path: fullPath,
+                    relative: relativePath,
+                    language: langMap[ext].name,
+                    type: langMap[ext].type,
+                    extension: ext
+                  });
+                }
               }
             } catch (_) {}
           }
@@ -512,11 +538,20 @@ io.on('connection', (socket) => {
             const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
             if (content && content.trim()) {
               const lines = content.split('\n').length;
-              const ext = f.split('.').pop();
-              const lang = { 'cs': 'C#', 'js': 'JavaScript', 'ts': 'TypeScript', 'java': 'Java', 'py': 'Python', 'go': 'Go', 'rb': 'Ruby', 'php': 'PHP', 'cpp': 'C++', 'c': 'C' }[ext] || 'Unknown';
-              languagesDetected[lang] = (languagesDetected[lang] || 0) + 1;
+              const ext = f.split('.').pop().toLowerCase();
+              const langInfo = {
+                'cs': { name: 'C#', type: 'backend' }, 'java': { name: 'Java', type: 'backend' },
+                'py': { name: 'Python', type: 'backend' }, 'go': { name: 'Go', type: 'backend' },
+                'rb': { name: 'Ruby', type: 'backend' }, 'php': { name: 'PHP', type: 'backend' },
+                'js': { name: 'JavaScript', type: 'backend' }, 'ts': { name: 'TypeScript', type: 'backend' },
+                'html': { name: 'HTML', type: 'frontend' }, 'css': { name: 'CSS', type: 'frontend' },
+                'jsx': { name: 'React JSX', type: 'frontend' }, 'tsx': { name: 'React TSX', type: 'frontend' }
+              }[ext] || { name: 'Unknown', type: 'backend' };
+
+              const langType = langInfo.type;
+              languagesDetected[langType][langInfo.name] = (languagesDetected[langType][langInfo.name] || 0) + 1;
               totalCodeLines += lines;
-              analyzedFiles.push({ file: f, lines, language: lang });
+              analyzedFiles.push({ file: f, lines, language: langInfo.name, type: langType });
               codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 3000)}`;
             }
           }
@@ -536,9 +571,10 @@ io.on('connection', (socket) => {
               if (content && content.trim()) {
                 const lines = content.split('\n').length;
                 const lang = fileInfo.language || 'Unknown';
-                languagesDetected[lang] = (languagesDetected[lang] || 0) + 1;
+                const langType = fileInfo.type || 'backend';
+                languagesDetected[langType][lang] = (languagesDetected[langType][lang] || 0) + 1;
                 totalCodeLines += lines;
-                analyzedFiles.push({ file: fileInfo.relative, lines, language: lang });
+                analyzedFiles.push({ file: fileInfo.relative, lines, language: lang, type: langType });
                 codeSnippet += `\n\n// FILE: ${fileInfo.relative}\n${content.substring(0, 3000)}`;
               }
             } catch (_) {}
@@ -569,8 +605,8 @@ public class UserService {
   }
 }`;
         totalCodeLines = 15;
-        analyzedFiles = [{ file: 'Demo.cs', lines: 15, language: 'C#' }];
-        languagesDetected['C#'] = 1;
+        analyzedFiles = [{ file: 'Demo.cs', lines: 15, language: 'C#', type: 'backend' }];
+        languagesDetected.backend['C#'] = 1;
       }
 
       log(`📊 Total Code Lines: ${totalCodeLines} (${analyzedFiles.length} files)`);
@@ -604,6 +640,20 @@ public class UserService {
         "severity": "critical|high|medium",
         "pattern": "masked secret (e.g., ghp_****)",
         "description": "what was found"
+      }
+    ]
+  },
+  "syntaxCheck": {
+    "passed": boolean,
+    "totalErrors": number,
+    "errors": [
+      {
+        "file": "filename",
+        "line": number,
+        "column": number,
+        "severity": "error|warning",
+        "message": "syntax error description",
+        "suggestion": "how to fix it"
       }
     ]
   },
@@ -691,6 +741,10 @@ IMPORTANT:
 - For secret scanning: Check patterns like "password=", "api_key=", "token=", "secret=", hardcoded connection strings
 - Ignore .env files for secret scanning (they are configuration files)
 - If NO secrets found, set secretsFound.detected to false and secrets array to empty
+- SYNTAX CHECK: Analyze code for syntax errors (missing brackets, semicolons, wrong syntax, typos in keywords)
+- Check for: unclosed brackets, missing semicolons, invalid variable names, wrong function syntax, typos in language keywords
+- If syntax is OK, set syntaxCheck.passed to true and errors array to empty
+- If syntax errors found, provide line number, error message, and suggestion to fix
 - Check for SQL injection, XSS, insecure deserialization
 - Identify performance issues like N+1 queries, memory leaks
 - Flag code smells like long methods, god classes, duplicate code
@@ -702,13 +756,14 @@ Total Code Lines: ${totalCodeLines}
 Analyzed Files: ${analyzedFiles.map(f => `${f.file} (${f.lines} lines)`).join(', ')}
 
 Analyze for:
-1. Security vulnerabilities (OWASP Top 10)
-2. SECRETS SCANNING - Check for hardcoded passwords, API keys, tokens, credentials (EXCLUDE .env files)
-3. Code quality issues
-4. Performance bottlenecks
-5. Code duplications
-6. Maintainability concerns
-7. Cyclomatic complexity
+1. SYNTAX CHECK - Check for syntax errors, missing brackets, semicolons, typos in keywords, invalid syntax
+2. Security vulnerabilities (OWASP Top 10)
+3. SECRETS SCANNING - Check for hardcoded passwords, API keys, tokens, credentials (EXCLUDE .env files)
+4. Code quality issues
+5. Performance bottlenecks
+6. Code duplications
+7. Maintainability concerns
+8. Cyclomatic complexity
 
 Code to analyze:
 ${codeSnippet}` }]
@@ -739,13 +794,19 @@ ${codeSnippet}` }]
         review.secretsFound = { detected: false, count: 0, secrets: [] };
       }
 
+      // Ensure syntaxCheck exists
+      if (!review.syntaxCheck) {
+        review.syntaxCheck = { passed: true, totalErrors: 0, errors: [] };
+      }
+
       // FORCE SET totalCodeLines from actual scan (don't trust AI response)
       review.totalCodeLines = totalCodeLines;
       review.linesOfCode = totalCodeLines;
 
-      // Add programming languages detected
+      // Add programming languages detected (backend/frontend separate)
       review.languagesDetected = languagesDetected;
-      review.primaryLanguage = Object.keys(languagesDetected).sort((a,b) => languagesDetected[b] - languagesDetected[a])[0] || 'Unknown';
+      const allLangs = { ...languagesDetected.backend, ...languagesDetected.frontend };
+      review.primaryLanguage = Object.keys(allLangs).sort((a,b) => allLangs[b] - allLangs[a])[0] || 'Unknown';
 
       // Add analyzed files info
       if (!review.files || review.files.length === 0) {
