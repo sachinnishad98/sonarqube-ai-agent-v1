@@ -1,21 +1,19 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T05:59:10.211Z
-> Files: 32 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T06:30:00.489Z
+> Files: 30 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
 - `.gitignore` — Git ignore rules (~94 tok)
 - `check-sonar.bat` (~190 tok)
 - `CLAUDE.md` — OpenWolf (~57 tok)
-- `demo-presentation.html` — SonarAI - Organization Demo (~10119 tok)
-- `DEMO-QA.md` — 🎯 SonarAI v3.0 - Demo Q&A Guide (~5497 tok)
 - `install-sonar-scanner.bat` (~271 tok)
 - `package-lock.json` — npm lock file (~14614 tok)
 - `package.json` — Node.js package manifest (~128 tok)
 - `README.md` — Project documentation (~2111 tok)
 - `server.js` — SonarAI v3.0 — GitHub + Local SonarQube Version (~20474 tok)
-- `server.log` (~84 tok)
+- `server.log` (~176 tok)
 - `SETUP_GUIDE.md` — 🚀 SonarAI Agent — Complete Setup Guide (~2035 tok)
 - `sonar-project.properties` — ,coverage/**,dist/**,build/**,.git/**,.claude/**,.wolf/**,**/*.test.js,**/*.spec.js (~134 tok)
 - `SONARQUBE_LABEL_FIX_GUIDE.md` — SonarQube Label Fix Guide (~829 tok)
@@ -26,7 +24,7 @@
 ## .claude/
 
 - `settings.json` (~441 tok)
-- `settings.local.json` (~75 tok)
+- `settings.local.json` (~84 tok)
 
 ## .claude/rules/
 
@@ -63,4 +61,4 @@
 
 ## public/
 
-- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~23031 tok)
+- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~23411 tok)
