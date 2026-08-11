@@ -10,6 +10,10 @@
 *.env
 .claude
 
+# Auto-generated per-scan, contains live SONAR_TOKEN — never commit
+sonar-project.properties
+.scannerwork/
+
 # Node
 node_modules/
 npm-debug.log*

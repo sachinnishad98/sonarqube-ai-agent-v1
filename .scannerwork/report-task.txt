@@ -1,6 +1,0 @@
-projectKey=sachinnishad98-sonarqube-ai-agent-v1-main-20260507074422
-serverUrl=http://localhost:9000
-serverVersion=26.4.0.121862
-dashboardUrl=http://localhost:9000/dashboard?id=sachinnishad98-sonarqube-ai-agent-v1-main-20260507074422
-ceTaskId=9f8c196b-7fad-46b3-8ae4-061761082c33
-ceTaskUrl=http://localhost:9000/api/ce/task?id=9f8c196b-7fad-46b3-8ae4-061761082c33
