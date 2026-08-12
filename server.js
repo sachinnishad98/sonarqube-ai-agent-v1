@@ -130,10 +130,14 @@ function getRepoPath(repoName) {
 function safeError(e) {
   if (!e) return 'Unknown error';
   let msg = e.message || String(e);
-  msg = msg.replace(/sqa_[a-zA-Z0-9]+/g,       '[SONAR_TOKEN]');
-  msg = msg.replace(/sk-ant-[a-zA-Z0-9\-_]+/g, '[ANTHROPIC_KEY]');
-  msg = msg.replace(/ghp_[a-zA-Z0-9]+/g,        '[GITHUB_TOKEN]');
-  msg = msg.replace(/[a-zA-Z0-9+/]{50,}={0,2}/g,'[TOKEN]');
+  msg = msg.replace(/sq[apu]_[a-zA-Z0-9]+/g,           '[SONAR_TOKEN]');
+  msg = msg.replace(/sk-ant-[a-zA-Z0-9\-_]+/g,         '[ANTHROPIC_KEY]');
+  // Classic (ghp_/gho_/ghs_) and fine-grained (github_pat_) GitHub tokens.
+  // The fine-grained form contains underscores, so it must be matched
+  // explicitly — the generic base64 rule below only catches part of it.
+  msg = msg.replace(/gh[pos]_[a-zA-Z0-9]+/g,           '[GITHUB_TOKEN]');
+  msg = msg.replace(/github_pat_[a-zA-Z0-9_]+/g,       '[GITHUB_TOKEN]');
+  msg = msg.replace(/[a-zA-Z0-9+/]{50,}={0,2}/g,       '[TOKEN]');
   return msg.substring(0, 300);
 }
 
@@ -154,10 +158,22 @@ const rateLimiter = createRateLimiter(10, 60 * 1000);
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
+/**
+ * Redacts the credential header before a git command is logged.
+ * `git -c http.extraheader=AUTHORIZATION: basic <base64>` carries
+ * base64("<user>:<GITHUB_TOKEN>") — printing it verbatim leaks the PAT into
+ * the console, the server log file and anything scraping either of them.
+ */
+function redactGitArgs(args) {
+  return args.map(a =>
+    /^http\.extraheader=/i.test(a) ? 'http.extraheader=AUTHORIZATION: basic [REDACTED]' : a
+  );
+}
+
 /** Secure git runner */
 function gitExec(args, cwd) {
   return new Promise((resolve, reject) => {
-    const cmdStr = `git ${args.join(' ')}`;
+    const cmdStr = `git ${redactGitArgs(args).join(' ')}`;
     console.log(`[gitExec] Running: ${cmdStr} in ${cwd}`);
 
     execFile('git', args, {
@@ -166,10 +182,11 @@ function gitExec(args, cwd) {
       maxBuffer: 10 * 1024 * 1024
     }, (err, stdout, stderr) => {
       if (err) {
-        console.error(`[gitExec] Error: ${stderr || err.message}`);
-        reject(new Error(stderr || err.message));
+        // safeError also strips tokens that git itself may echo back
+        console.error(`[gitExec] Error: ${safeError(new Error(stderr || err.message))}`);
+        reject(new Error(safeError(new Error(stderr || err.message))));
       } else {
-        console.log(`[gitExec] Success: ${stdout.substring(0, 200)}`);
+        console.log(`[gitExec] Success: ${safeError(new Error(stdout.substring(0, 200)))}`);
         resolve(stdout.trim());
       }
     });
@@ -263,8 +280,27 @@ async function createGitHubIssue({ repoName, title, body }) {
 }
 
 // ─── EMAIL ────────────────────────────────────────────────────────────────────
+let smtpWarned = false;
+
 async function sendEmail({ to, subject, html }) {
   if (!process.env.SMTP_HOST || !to) return;
+
+  // Host set but credentials blank produces nodemailer's opaque
+  // 'Missing credentials for "PLAIN"'. Say what is actually wrong, once.
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (!smtpWarned) {
+      smtpWarned = true;
+      const missing = [
+        !process.env.SMTP_USER ? 'SMTP_USER' : null,
+        !process.env.SMTP_PASS ? 'SMTP_PASS' : null
+      ].filter(Boolean).join(' and ');
+      console.warn(`[Email] ⏭️  Skipping notifications — ${missing} is empty in .env.`);
+      console.warn('[Email]     For Gmail this must be a 16-character App Password, not your account password:');
+      console.warn('[Email]     Google Account → Security → 2-Step Verification → App passwords');
+    }
+    return;
+  }
+
   try {
     const t = require('nodemailer').createTransport({
       host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT) || 587,
@@ -987,9 +1023,27 @@ ${JSON.stringify(sonarIssues, null, 2)}` }]
 
       const aiData = await aiRes.json();
       if (!aiRes.ok || aiData.error) {
-        const apiErrMsg = aiData.error?.message || `Anthropic API returned ${aiRes.status}`;
+        const apiErrMsg  = aiData.error?.message || `Anthropic API returned ${aiRes.status}`;
+        const apiErrType = aiData.error?.type || '';
+
+        // Account-level problems are not scan failures — the SonarQube results
+        // are fine and already saved. Say what to actually do about it, so a
+        // billing or key issue doesn't read like a broken pipeline.
+        let hint = '';
+        if (/credit balance is too low/i.test(apiErrMsg)) {
+          hint = 'The API key is valid, but the Anthropic account has no credit. Add credits at https://console.anthropic.com/settings/billing — the SonarQube scan itself succeeded and its results are unaffected.';
+        } else if (apiErrType === 'authentication_error' || aiRes.status === 401) {
+          hint = 'ANTHROPIC_API_KEY was rejected. Check the key in .env at https://console.anthropic.com/settings/keys, then restart the agent.';
+        } else if (apiErrType === 'rate_limit_error' || aiRes.status === 429) {
+          hint = 'Anthropic rate limit hit. Wait a minute and run the review again — the scan results are already saved.';
+        }
+
         log(`❌ Claude AI call failed: ${apiErrMsg}`);
-        return socket.emit('review-result', { success: false, error: `AI analysis failed: ${safeError({ message: apiErrMsg })}` });
+        if (hint) log(`💡 ${hint}`);
+        return socket.emit('review-result', {
+          success: false,
+          error: `AI analysis failed: ${safeError({ message: apiErrMsg })}${hint ? `\n\n${hint}` : ''}`
+        });
       }
       const raw = aiData.content?.[0]?.text || '{}';
       let review;
@@ -1158,6 +1212,30 @@ ${JSON.stringify(sonarIssues, null, 2)}` }]
     log('info',  `📦 Project Type: ${projectType}`);
     log('info',  `🌐 SonarQube: ${SONAR_URL}`);
 
+    // Preflight: without a reachable server the scanner runs for a minute and
+    // then dies with "Fail to get bootstrap index", and every follow-up API
+    // call fails with an empty `reason:`. Fail fast with something actionable.
+    log('info', '🔌 Checking SonarQube is reachable...');
+    try {
+      const ping = await fetch(`${SONAR_URL}/api/system/status`, { timeout: 5000 });
+      const status = await ping.json().catch(() => ({}));
+      if (status.status && status.status !== 'UP') {
+        log('info', `⏳ SonarQube is starting up (status: ${status.status}) — wait for it to report UP, then scan again.`);
+        return socket.emit('scan-complete', {
+          success: false, branch, repoName,
+          error: `SonarQube is not ready yet (status: ${status.status}). It usually takes 2–3 minutes to finish starting. Wait until ${SONAR_URL} loads, then run the scan again.`
+        });
+      }
+      log('success', `✅ SonarQube is up${status.version ? ` (v${status.version})` : ''}`);
+    } catch (pingErr) {
+      log('error', `❌ Cannot reach SonarQube at ${SONAR_URL}`);
+      log('info',  '💡 Start it with StartSonar.bat, wait for "SonarQube is operational", then scan again.');
+      return socket.emit('scan-complete', {
+        success: false, branch, repoName,
+        error: `SonarQube is not running at ${SONAR_URL}. Start it with StartSonar.bat (takes 2–3 minutes), wait until the site loads, then run the scan again.`
+      });
+    }
+
     try {
       if (projectType === 'dotnet') {
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1230,22 +1308,15 @@ sonar.token=${SONAR_TOKEN}`;
         try {
           log('info', '🔍 Checking for sonar-scanner CLI...');
 
-          // Quick check if sonar-scanner exists
+          // Was `gitExec([scannerCmd, '-v'])`, which ran `git sonar-scanner.cmd -v`
+          // — git has no such subcommand, so the check always failed and only
+          // succeeded via the fallback below, after logging a bogus git error.
           try {
-            await gitExec([scannerCmd, '-v'], repoPath).catch(() => {
-              throw new Error('Command test failed');
-            });
+            await runCommand(`${scannerCmd} -v`, repoPath, socket, 'scan-log');
             scannerFound = true;
             log('success', '✅ sonar-scanner CLI found');
           } catch (_) {
-            // Try alternative command
-            try {
-              await runCommand(`${scannerCmd} -v`, repoPath, socket, 'scan-log');
-              scannerFound = true;
-              log('success', '✅ sonar-scanner CLI found');
-            } catch (__) {
-              scannerFound = false;
-            }
+            scannerFound = false;
           }
 
           if (scannerFound) {
