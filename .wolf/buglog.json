@@ -408,7 +408,13 @@
       "file": "server.js",
       "root_cause": "GITHUB_TOKEN in .env is expired/invalid — GitHub API returns 401 on https://api.github.com/users/<username>/repos. Confirmed via server log '[repos] GitHub 401 — Token expired or invalid' and direct curl to api.github.com/user returning 401.",
       "fix": "User must regenerate a GitHub PAT at github.com/settings/tokens (classic, scopes: repo + read:user) and update GITHUB_TOKEN in .env, then restart `npm start`.",
-      "tags": ["github", "401", "token-expired", "repositories", "env"],
+      "tags": [
+        "github",
+        "401",
+        "token-expired",
+        "repositories",
+        "env"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-11T00:00:00.000Z"
@@ -420,8 +426,16 @@
       "file": ".env",
       "root_cause": "SONAR_TOKEN in .env was invalid/expired — confirmed via curl -u <token>: http://localhost:9000/api/authentication/validate returning {\"valid\":false}.",
       "fix": "Generated a fresh token via SonarQube API using admin credentials: curl -u admin:<password> -X POST http://localhost:9000/api/user_tokens/generate -d name=<name>. Updated SONAR_TOKEN in .env, then force-killed the stale node.exe holding port 3002 (TaskStop alone did not release it — same as bug-026) and restarted npm start.",
-      "tags": ["sonarqube", "401", "token-expired", "scan", "env"],
-      "related_bugs": ["bug-026"],
+      "tags": [
+        "sonarqube",
+        "401",
+        "token-expired",
+        "scan",
+        "env"
+      ],
+      "related_bugs": [
+        "bug-026"
+      ],
       "occurrences": 1,
       "last_seen": "2026-08-11T10:59:00.000Z"
     },
@@ -432,7 +446,13 @@
       "file": "server.js",
       "root_cause": "A stale ANTHROPIC_API_KEY was already set at the Windows User+Machine environment-variable level (verified via [Environment]::GetEnvironmentVariable). dotenv.config() does NOT override existing process.env values by default, so the OS-level (invalid) key silently won over the correct .env value — server startup log 'AI Key: Set' was misleading since it didn't reveal which source won.",
       "fix": "Changed require('dotenv').config() to require('dotenv').config({ override: true }) in server.js so .env always takes precedence over stale OS-level env vars of the same name. Confirmed the real Anthropic key in .env is valid but out of credit balance (direct curl to api.anthropic.com/v1/messages returns 'Your credit balance is too low') — that is a separate, account-level issue the user needs to resolve at console.anthropic.com/settings/billing, not a code bug.",
-      "tags": ["anthropic", "dotenv", "env-var-shadowing", "ai-review", "api-key"],
+      "tags": [
+        "anthropic",
+        "dotenv",
+        "env-var-shadowing",
+        "ai-review",
+        "api-key"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T00:00:00.000Z"
@@ -444,7 +464,13 @@
       "file": "public/index.html",
       "root_cause": "SonarQube's /api/measures/component returns reliability_rating, security_rating and sqale_rating as numeric strings ('1.0'..'5.0'), not letters. The frontend interpolated the raw value straight into both the badge text and the class name: class=\"rating rating-${m.reliability_rating||'A'}\" produced the non-existent class 'rating-1.0'.",
       "fix": "Added a ratingLetter(v) helper in public/index.html that maps 1..5 to A..E (and passes through values that are already letters), used everywhere a rating is displayed — the scan-complete result panel and the new Scan History table.",
-      "tags": ["sonarqube", "metrics", "ratings", "frontend", "css-class"],
+      "tags": [
+        "sonarqube",
+        "metrics",
+        "ratings",
+        "frontend",
+        "css-class"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T15:36:00.000Z"
@@ -456,7 +482,12 @@
       "file": "public/index.html",
       "root_cause": "Leftover from the Azure DevOps era: the frontend read cfg.org and cfg.project from /api/config, but the GitHub-based server only returns githubUsername, sonarUrl and repoBasePath. Those keys never existed, so the cards were permanently empty. Several other Azure labels were also stale ('Fetching from Azure DevOps...', 'Azure API unreachable', fa-microsoft pipeline icon).",
       "fix": "Rewrote config handling into loadServerConfig()/applyServerConfig(); the tile now shows the GitHub account from cfg.githubUsername. Extended /api/config in server.js with integration status booleans (githubConfigured, sonarConfigured, aiConfigured, smtpConfigured), aiModel, notifyEmail and smtpHost — booleans only, never secret values. Replaced all remaining Azure DevOps wording and the fa-microsoft icon with GitHub equivalents.",
-      "tags": ["azure-leftover", "api-config", "github", "frontend"],
+      "tags": [
+        "azure-leftover",
+        "api-config",
+        "github",
+        "frontend"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T15:20:00.000Z"
@@ -468,7 +499,12 @@
       "file": "public/index.html",
       "root_cause": "The scan-complete socket handler wrote into a 'recent-scans' sidebar block. The dashboard rebuild replaced the sidebar with grouped navigation and dropped that element, which would have thrown on the next completed scan.",
       "fix": "Replaced the sidebar write with recordScanRun(), which persists the run to localStorage ('sonarai.scanHistory') and feeds both the Scan History page and the Overview 'Latest Scan Runs' card. Also added an id-reference audit (all getElementById/$ calls cross-checked against ids present in the file) to catch this class of breakage after markup edits.",
-      "tags": ["dom", "refactor", "null-reference", "scan-complete"],
+      "tags": [
+        "dom",
+        "refactor",
+        "null-reference",
+        "scan-complete"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T15:25:00.000Z"
@@ -480,7 +516,12 @@
       "file": "server.js",
       "root_cause": "changeOwnPassword() initially called PATCH /api/users/:id, which is guarded by requirePerm('users.edit'). Only admins hold that permission, so every non-admin got a 403 when rotating their own credentials.",
       "fix": "Added POST /api/auth/password — session-only (no permission required), but requires the current password and enforces the 8-character minimum. The frontend self-service form now posts there; the admin reset path via PATCH /api/users/:id is unchanged.",
-      "tags": ["auth", "permissions", "rbac", "password"],
+      "tags": [
+        "auth",
+        "permissions",
+        "rbac",
+        "password"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T16:48:00.000Z"
@@ -492,10 +533,82 @@
       "file": "public/index.html",
       "root_cause": "The four stat tiles stayed visible for roles without users.view. Since loadUsers() returns early for those roles, the tiles kept their initial 0 values — reading as 'this agent has no users' rather than 'you cannot see this'.",
       "fix": "Gave the tile row id 'um-tiles' and hid it in gateUiByPermission() whenever users.view is absent, leaving only the explanatory permission-denied note.",
-      "tags": ["rbac", "ui", "misleading-empty-state"],
+      "tags": [
+        "rbac",
+        "ui",
+        "misleading-empty-state"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T17:03:00.000Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-08-12T17:50:00.000Z",
+      "error_message": "GitHub PAT printed in plaintext on every git command",
+      "file": "server.js",
+      "root_cause": "gitExec logged its raw argv, which includes `-c http.extraheader=AUTHORIZATION: basic <base64>`, and that base64 decodes to \"<user>:<GITHUB_TOKEN>\". Every fetch/checkout/pull wrote a working credential to the console, server.log and the background task output. safeError also lacked a github_pat_ pattern, so the fine-grained token was only partly masked even where safeError was applied.",
+      "fix": "Added redactGitArgs() to mask the extraheader argument before logging, routed gitExec stdout/stderr through safeError, and extended safeError with explicit github_pat_, gho_/ghs_ and sqp_/squ_ patterns. Verified git history and tracked files never contained the token — the leak was console/log only.",
+      "tags": [
+        "security",
+        "token-leak",
+        "logging",
+        "github",
+        "git"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T17:50:00.000Z"
+    },
+    {
+      "id": "bug-019",
+      "timestamp": "2026-08-12T17:52:00.000Z",
+      "error_message": "git: 'sonar-scanner.cmd' is not a git command. See 'git --help'.",
+      "file": "server.js",
+      "root_cause": "The scanner presence check called gitExec([scannerCmd, '-v']), which runs `git sonar-scanner.cmd -v`. Git has no such subcommand so it always threw; the scanner was only ever found via the fallback branch, after logging a misleading git error every scan.",
+      "fix": "Replaced with a direct runCommand(`${scannerCmd} -v`) call and removed the now-redundant fallback branch.",
+      "tags": [
+        "sonar-scanner",
+        "wrong-executable",
+        "scan"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T17:52:00.000Z"
+    },
+    {
+      "id": "bug-020",
+      "timestamp": "2026-08-12T17:55:00.000Z",
+      "error_message": "Scan died with \"Fail to get bootstrap index from server\", then follow-up API calls failed with an empty `reason:`",
+      "file": "server.js",
+      "root_cause": "SonarQube was not running on :9000 and nothing checked first. The scanner burned a minute before failing, then /api/projects/create and /api/issues/search failed with node-fetch errors whose reason string was blank, hiding the real cause. Root cause was environmental, not code — but the pipeline gave no usable signal.",
+      "fix": "Added a /api/system/status preflight before every scan that fails immediately with actionable instructions, and distinguishes STARTING (wait) from unreachable (start StartSonar.bat). Note: SonarQube takes ~2 minutes to go from launch to status UP.",
+      "tags": [
+        "sonarqube",
+        "preflight",
+        "error-handling",
+        "diagnosability"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T17:55:00.000Z"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-08-12T17:57:00.000Z",
+      "error_message": "[Email] Missing credentials for \"PLAIN\"",
+      "file": "server.js",
+      "root_cause": "SMTP_PASS is empty in .env but sendEmail only guarded on SMTP_HOST, so nodemailer attempted PLAIN auth with a blank password and failed opaquely on every notification.",
+      "fix": "sendEmail now returns early when SMTP_USER or SMTP_PASS is blank, logging once which variable is missing plus the Gmail App Password steps. The user still has to fill SMTP_PASS for mail to actually send.",
+      "tags": [
+        "email",
+        "smtp",
+        "config",
+        "error-message"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T17:57:00.000Z"
     }
   ]
 }

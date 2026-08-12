@@ -223,3 +223,5 @@
 | 17:25 | SESSION END — Dashboard shell rebuild (5 nav groups, 11 new views) + BusinessNext login page + full RBAC auth. 4 bugs logged (bug-013..017). OPEN: branch not yet merged to main. | server.js, public/index.html, public/login.html, public/bn-logo.svg, .env.example | done | ~95000 |
 | 17:34 | Merged feat/login-rbac-dashboard into main, pushed, deleted branch (local+remote) | git | done | ~900 |
 | 17:36 | Recorded git preference: commit direct to main, no branches/PRs | .wolf/cerebrum.md | done | ~400 |
+| 17:58 | Fixed GitHub PAT leak in gitExec logs, git-invoked sonar-scanner, SonarQube preflight, SMTP + Anthropic error clarity | server.js | done | ~6200 |
+| 18:00 | Started SonarQube (was stopped — root cause of scan failure). Scan now works: 249 issues, 6443 LOC | StartSonar.bat | verified | ~1200 |
