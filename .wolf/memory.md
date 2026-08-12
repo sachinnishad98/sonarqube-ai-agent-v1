@@ -219,3 +219,5 @@
 | 16:42 | Login page built from BusinessNext reference (4.png + Login_infra.html) with BN logo + 4-slide carousel | public/login.html, public/bn-logo.svg | done | ~6100 |
 | 16:50 | User Management rewired to real CRUD; UI permission gating; self-service password endpoint | public/index.html, server.js | done | ~5800 |
 | 16:58 | Verified: unauth redirect, bad login, admin CRUD, last-admin guards, reviewer/viewer 403s | puppeteer + curl | verified | ~4200 |
+| 17:22 | Committed + pushed to branch feat/login-rbac-dashboard (2 commits, +2667/-155) | 10 files | pushed | ~1800 |
+| 17:25 | SESSION END — Dashboard shell rebuild (5 nav groups, 11 new views) + BusinessNext login page + full RBAC auth. 4 bugs logged (bug-013..017). OPEN: branch not yet merged to main. | server.js, public/index.html, public/login.html, public/bn-logo.svg, .env.example | done | ~95000 |
