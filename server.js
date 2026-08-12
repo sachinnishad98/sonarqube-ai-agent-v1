@@ -20,6 +20,7 @@ const { Server } = require('socket.io');
 const { execFile, spawn } = require('child_process');
 const path       = require('path');
 const fs         = require('fs');
+const crypto     = require('crypto');
 const fetch      = require('node-fetch');
 // override:true — .env must win over any stale OS-level env vars of the same
 // name (dotenv otherwise silently keeps whatever the shell/system already has set).
@@ -49,7 +50,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static('public'));
 app.use(express.json({ limit: '10kb' }));
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ const SONAR_TOKEN     = process.env.SONAR_TOKEN      || '';
 
 // Claude AI
 const ANTHROPIC_KEY   = process.env.ANTHROPIC_API_KEY|| '';
+const AI_MODEL        = process.env.AI_MODEL         || 'claude-sonnet-4-5';
 
 // Email (optional)
 const NOTIFY_EMAIL    = process.env.NOTIFY_EMAIL     || '';
@@ -402,9 +403,352 @@ function saveAiReport(entry) {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTHENTICATION & ROLE-BASED AUTHORIZATION
+
+   Local account store in data/users.json. Passwords are scrypt-hashed with a
+   per-user salt; sessions are stateless HMAC-signed cookies keyed off a secret
+   generated on first boot. No external auth dependencies.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const USERS_FILE     = path.join(DATA_DIR, 'users.json');
+const SESSION_COOKIE = 'sai_session';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;   // 12 hours
+const REMEMBER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days with "remember me"
+
+// Every action the dashboard can gate on.
+const ALL_PERMISSIONS = [
+  'users.view', 'users.create', 'users.edit', 'users.delete',
+  'projects.edit', 'scan.run', 'review.run',
+  'repos.view', 'reports.view', 'reports.delete',
+  'settings.edit', 'audit.view'
+];
+
+// '*' means every permission, present and future — admins get the lot.
+const ROLE_PERMISSIONS = {
+  admin:    ['*'],
+  reviewer: ['repos.view', 'reports.view', 'scan.run', 'review.run', 'projects.edit', 'audit.view'],
+  viewer:   ['repos.view', 'reports.view']
+};
+const ROLES = Object.keys(ROLE_PERMISSIONS);
+
+function permissionsFor(role) {
+  const p = ROLE_PERMISSIONS[role];
+  if (!p) return [];
+  return p[0] === '*' ? ALL_PERMISSIONS.slice() : p.slice();
+}
+
+function hasPerm(user, perm) {
+  if (!user) return false;
+  const p = ROLE_PERMISSIONS[user.role] || [];
+  return p[0] === '*' || p.includes(perm);
+}
+
+// ── Store ───────────────────────────────────────────────────────────────────
+function loadAuthStore() {
+  try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
+  catch (_) { return { secret: '', users: [] }; }
+}
+
+function saveAuthStore(store) {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(USERS_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
+}
+
+function hashPassword(password, salt) {
+  return crypto.scryptSync(String(password), salt, 64).toString('hex');
+}
+
+function verifyPassword(password, user) {
+  if (!user || !user.salt || !user.passwordHash) return false;
+  const candidate = Buffer.from(hashPassword(password, user.salt), 'hex');
+  const stored    = Buffer.from(user.passwordHash, 'hex');
+  return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored);
+}
+
+function makeUser({ username, password, name, email, role }) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return {
+    id: crypto.randomUUID(),
+    username: String(username).toLowerCase().trim(),
+    name: name || username,
+    email: email || '',
+    role: ROLES.includes(role) ? role : 'viewer',
+    salt,
+    passwordHash: hashPassword(password, salt),
+    active: true,
+    createdAt: new Date().toISOString(),
+    lastLogin: null
+  };
+}
+
+// First boot: create the admin account. Password comes from ADMIN_PASSWORD in
+// .env when set, otherwise one is generated and printed once to the console.
+function ensureAuthStore() {
+  const store = loadAuthStore();
+  let changed = false;
+
+  if (!store.secret) { store.secret = crypto.randomBytes(48).toString('hex'); changed = true; }
+  if (!Array.isArray(store.users)) { store.users = []; changed = true; }
+
+  if (!store.users.some(u => u.role === 'admin')) {
+    const username = (process.env.ADMIN_USERNAME || 'admin').toLowerCase().trim();
+    const generated = !process.env.ADMIN_PASSWORD;
+    const password  = process.env.ADMIN_PASSWORD || crypto.randomBytes(9).toString('base64url');
+    store.users.push(makeUser({
+      username, password, role: 'admin',
+      name: process.env.ADMIN_NAME || 'Admin User',
+      email: process.env.ADMIN_EMAIL || NOTIFY_EMAIL || ''
+    }));
+    changed = true;
+    console.log('\n╔══════════════════════════════════════════════════════════════╗');
+    console.log('║  ADMIN ACCOUNT CREATED                                       ║');
+    console.log('╠══════════════════════════════════════════════════════════════╣');
+    console.log(`║  Username : ${username.padEnd(48)}║`);
+    console.log(`║  Password : ${String(password).padEnd(48)}║`);
+    console.log('║                                                              ║');
+    console.log(generated
+      ? '║  Generated once — save it now, it is not shown again.        ║'
+      : '║  Taken from ADMIN_PASSWORD in .env                           ║');
+    console.log('╚══════════════════════════════════════════════════════════════╝\n');
+  }
+
+  if (changed) saveAuthStore(store);
+  return store;
+}
+
+let authStore = ensureAuthStore();
+
+// ── Sessions: base64url(payload).hmac ───────────────────────────────────────
+function signSession(userId, ttlMs) {
+  const payload = Buffer
+    .from(JSON.stringify({ uid: userId, exp: Date.now() + ttlMs }))
+    .toString('base64url');
+  const sig = crypto.createHmac('sha256', authStore.secret).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+function userFromToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const [payload, sig] = token.split('.');
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac('sha256', authStore.secret).update(payload).digest('base64url');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const { uid, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!uid || !exp || Date.now() > exp) return null;
+    const user = authStore.users.find(u => u.id === uid);
+    return user && user.active !== false ? user : null;
+  } catch (_) { return null; }
+}
+
+function parseCookies(header) {
+  const out = {};
+  String(header || '').split(';').forEach(part => {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  });
+  return out;
+}
+
+const currentUser = req => userFromToken(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
+
+// Public shape — never leaks salt or hash.
+const publicUser = u => ({
+  id: u.id, username: u.username, name: u.name, email: u.email, role: u.role,
+  active: u.active !== false, createdAt: u.createdAt, lastLogin: u.lastLogin,
+  permissions: permissionsFor(u.role)
+});
+
+// ── Login throttling (per IP) ───────────────────────────────────────────────
+const loginAttempts = new Map();
+function loginAllowed(ip) {
+  const now = Date.now();
+  const rec = loginAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > rec.resetAt) { rec.count = 0; rec.resetAt = now + 15 * 60 * 1000; }
+  loginAttempts.set(ip, rec);
+  return rec.count < 8;
+}
+function noteFailedLogin(ip) {
+  const rec = loginAttempts.get(ip);
+  if (rec) rec.count++;
+}
+
+// ── Auth routes (open — registered before the gate) ─────────────────────────
+app.get('/login', (req, res) => {
+  if (currentUser(req)) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!loginAllowed(ip)) {
+    return res.status(429).json({ error: 'Too many failed attempts. Try again in 15 minutes.' });
+  }
+  const { username, password, remember } = req.body || {};
+  const user = authStore.users.find(u => u.username === String(username || '').toLowerCase().trim());
+
+  // Same message for unknown user, wrong password and disabled account —
+  // never reveal which one it was.
+  if (!user || user.active === false || !verifyPassword(password || '', user)) {
+    noteFailedLogin(ip);
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  user.lastLogin = new Date().toISOString();
+  saveAuthStore(authStore);
+
+  const ttl = remember ? REMEMBER_TTL_MS : SESSION_TTL_MS;
+  res.setHeader('Set-Cookie',
+    `${SESSION_COOKIE}=${signSession(user.id, ttl)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(ttl / 1000)}`);
+  console.log(`🔐 Login: ${user.username} (${user.role})`);
+  res.json({ user: publicUser(user) });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'Not authenticated' });
+  res.json({ user: publicUser(user), roles: ROLES, allPermissions: ALL_PERMISSIONS });
+});
+
+// ── The gate: everything past here needs a session ──────────────────────────
+const PUBLIC_PATHS = new Set(['/login', '/login.html', '/bn-logo.svg', '/favicon.ico']);
+
+app.use((req, res, next) => {
+  if (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/socket.io/')) return next();
+  const user = currentUser(req);
+  if (user) { req.user = user; return next(); }
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Not authenticated' });
+  return res.redirect('/login');
+});
+
+app.use(express.static('public'));
+
+// Changing your own password needs a session, not a permission — otherwise a
+// viewer could never rotate their own credentials. Current password required.
+app.post('/api/auth/password', (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!verifyPassword(currentPassword || '', req.user)) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+  if (String(newPassword || '').length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+  req.user.salt = crypto.randomBytes(16).toString('hex');
+  req.user.passwordHash = hashPassword(newPassword, req.user.salt);
+  saveAuthStore(authStore);
+  console.log(`🔑 Password changed by ${req.user.username}`);
+  res.json({ ok: true });
+});
+
+function requirePerm(perm) {
+  return (req, res, next) => hasPerm(req.user, perm)
+    ? next()
+    : res.status(403).json({ error: `Permission denied: ${perm} is not granted to the ${req.user.role} role.` });
+}
+
+// ── User management (admin) ─────────────────────────────────────────────────
+app.get('/api/users', requirePerm('users.view'), (req, res) => {
+  res.json({ users: authStore.users.map(publicUser), roles: ROLES, allPermissions: ALL_PERMISSIONS });
+});
+
+app.post('/api/users', requirePerm('users.create'), (req, res) => {
+  const { username, password, name, email, role } = req.body || {};
+  const uname = String(username || '').toLowerCase().trim();
+
+  if (!/^[a-z0-9._-]{3,32}$/.test(uname)) {
+    return res.status(400).json({ error: 'Username must be 3–32 characters: letters, digits, dot, dash or underscore.' });
+  }
+  if (String(password || '').length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  if (!ROLES.includes(role)) {
+    return res.status(400).json({ error: `Role must be one of: ${ROLES.join(', ')}.` });
+  }
+  if (authStore.users.some(u => u.username === uname)) {
+    return res.status(409).json({ error: 'That username already exists.' });
+  }
+
+  const user = makeUser({ username: uname, password, name, email, role });
+  authStore.users.push(user);
+  saveAuthStore(authStore);
+  console.log(`👤 User created: ${uname} (${role}) by ${req.user.username}`);
+  res.status(201).json({ user: publicUser(user) });
+});
+
+app.patch('/api/users/:id', requirePerm('users.edit'), (req, res) => {
+  const user = authStore.users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  const { name, email, role, active, password } = req.body || {};
+  const admins = authStore.users.filter(u => u.role === 'admin' && u.active !== false);
+  const lastAdmin = user.role === 'admin' && admins.length === 1 && admins[0].id === user.id;
+
+  // Guard against locking everyone out of the agent.
+  if (lastAdmin && ((role && role !== 'admin') || active === false)) {
+    return res.status(400).json({ error: 'This is the last active admin — demoting or disabling it would lock everyone out.' });
+  }
+
+  if (name !== undefined)  user.name  = String(name).slice(0, 80);
+  if (email !== undefined) user.email = String(email).slice(0, 120);
+  if (role !== undefined) {
+    if (!ROLES.includes(role)) return res.status(400).json({ error: `Role must be one of: ${ROLES.join(', ')}.` });
+    user.role = role;
+  }
+  if (active !== undefined) user.active = !!active;
+  if (password) {
+    if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    user.salt = crypto.randomBytes(16).toString('hex');
+    user.passwordHash = hashPassword(password, user.salt);
+  }
+
+  saveAuthStore(authStore);
+  console.log(`👤 User updated: ${user.username} by ${req.user.username}`);
+  res.json({ user: publicUser(user) });
+});
+
+app.delete('/api/users/:id', requirePerm('users.delete'), (req, res) => {
+  const user = authStore.users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+  if (user.id === req.user.id) return res.status(400).json({ error: 'You cannot delete the account you are signed in with.' });
+
+  const admins = authStore.users.filter(u => u.role === 'admin' && u.active !== false);
+  if (user.role === 'admin' && admins.length === 1) {
+    return res.status(400).json({ error: 'This is the last active admin — deleting it would lock everyone out.' });
+  }
+
+  authStore.users = authStore.users.filter(u => u.id !== user.id);
+  saveAuthStore(authStore);
+  console.log(`👤 User deleted: ${user.username} by ${req.user.username}`);
+  res.json({ ok: true });
+});
+
 // ─── SOCKET EVENTS ────────────────────────────────────────────────────────────
+// Sockets carry the same session cookie — reject anything unauthenticated.
+io.use((socket, next) => {
+  const user = userFromToken(parseCookies(socket.handshake.headers.cookie)[SESSION_COOKIE]);
+  if (!user) return next(new Error('unauthorized'));
+  socket.data.user = user;
+  next();
+});
+
+// Guard for socket events: replies on `failEvent` instead of silently ignoring.
+function socketAllowed(socket, perm, failEvent) {
+  if (hasPerm(socket.data.user, perm)) return true;
+  socket.emit(failEvent, {
+    success: false,
+    error: `Permission denied — the ${socket.data.user.role} role cannot perform this action.`
+  });
+  return false;
+}
+
 io.on('connection', (socket) => {
-  console.log(`✅ Client: ${socket.id}`);
+  console.log(`✅ Client: ${socket.id} — ${socket.data.user.username} (${socket.data.user.role})`);
 
   // ── 1. FETCH GITHUB REPOSITORIES ──────────────────────────────────────────
   socket.on('fetch-repositories', async () => {
@@ -457,6 +801,7 @@ io.on('connection', (socket) => {
 
   // ── 3. GIT OPERATIONS — CLONE OR PULL ─────────────────────────────────────
   socket.on('git-sync', async ({ branch, repoName }) => {
+    if (!socketAllowed(socket, 'scan.run', 'git-result')) return;
     if (!rateLimiter(socket.id, 'git-sync')) {
       return socket.emit('git-result', { success: false, error: 'Rate limit exceeded' });
     }
@@ -499,8 +844,13 @@ io.on('connection', (socket) => {
           throw new Error(`Directory exists but is not a git repository. Delete ${repoPath} and try again.`);
         }
 
+        // Inject GitHub auth as a per-command header — don't rely on the OS
+        // credential manager (fails silently/hangs for repos not cloned by this tool)
+        const authHeader = `AUTHORIZATION: basic ${Buffer.from(`${GITHUB_USERNAME}:${GITHUB_TOKEN}`).toString('base64')}`;
+        const authArgs = ['-c', `http.extraheader=${authHeader}`];
+
         log(`🔀 Fetching latest...`);
-        await gitExec(['fetch', '--all', '--prune'], repoPath);
+        await gitExec([...authArgs, 'fetch', '--all', '--prune'], repoPath);
         log(`✅ Fetch complete`);
 
         log(`🔀 Checking out ${branch}...`);
@@ -508,7 +858,7 @@ io.on('connection', (socket) => {
         log(`✅ Checkout complete`);
 
         log(`⬇️  Pulling latest changes...`);
-        await gitExec(['pull', 'origin', branch], repoPath);
+        await gitExec([...authArgs, 'pull', 'origin', branch], repoPath);
         log(`✅ Pull complete!`);
       }
 
@@ -532,6 +882,7 @@ io.on('connection', (socket) => {
 
   // ── 4. AI CODE REVIEW — based on SonarQube findings, NEVER raw source ───────
   socket.on('ai-review', async ({ branch, repoName, projectKey }) => {
+    if (!socketAllowed(socket, 'review.run', 'review-result')) return;
     if (!rateLimiter(socket.id, 'ai-review')) return socket.emit('review-result', { success: false, error: 'Rate limit exceeded' });
     if (!validateRepoName(repoName))  return socket.emit('review-result', { success: false, error: 'Invalid repo name' });
     if (!validateBranchName(branch))  return socket.emit('review-result', { success: false, error: 'Invalid branch name' });
@@ -591,7 +942,7 @@ io.on('connection', (socket) => {
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5', max_tokens: 4000, temperature: 0.2,
+          model: AI_MODEL, max_tokens: 4000, temperature: 0.2,
           system: `You are a senior code security and quality analyst. You will be given a JSON summary of SonarQube static-analysis findings for a repository — NOT source code, only issue metadata (rule, file, line, message, severity, type) and aggregate metrics. Analyze and prioritize these findings and return ONLY valid JSON (no markdown, no explanations):
 
 {
@@ -752,6 +1103,7 @@ ${JSON.stringify(sonarIssues, null, 2)}` }]
 
   // ── 5. SONARQUBE SCAN ──────────────────────────────────────────────────────
   socket.on('sonar-scan', async ({ branch, repoName, slnFile }) => {
+    if (!socketAllowed(socket, 'scan.run', 'scan-complete')) return;
     if (!rateLimiter(socket.id, 'sonar-scan')) return socket.emit('scan-complete', { success: false, error: 'Rate limit exceeded' });
     if (!validateRepoName(repoName)) return socket.emit('scan-complete', { success: false, error: 'Invalid repo name' });
     if (!validateBranchName(branch)) return socket.emit('scan-complete', { success: false, error: 'Invalid branch name' });
@@ -1110,7 +1462,15 @@ app.get('/api/health', (_, res) => res.json({
 app.get('/api/config', (_, res) => res.json({
   githubUsername: GITHUB_USERNAME,
   sonarUrl:       SONAR_URL,
-  repoBasePath:   REPO_BASE_PATH
+  repoBasePath:   REPO_BASE_PATH,
+  // Integration status — booleans only, never the secrets themselves.
+  githubConfigured: !!GITHUB_TOKEN,
+  sonarConfigured:  !!SONAR_TOKEN,
+  aiConfigured:     !!ANTHROPIC_KEY,
+  smtpConfigured:   !!process.env.SMTP_HOST,
+  aiModel:          AI_MODEL,
+  notifyEmail:      NOTIFY_EMAIL,
+  smtpHost:         process.env.SMTP_HOST || ''
 }));
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

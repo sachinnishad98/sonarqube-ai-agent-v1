@@ -32,3 +32,6 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Design QC screenshots — local artifacts, not source
+.wolf/designqc-captures/

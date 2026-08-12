@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SonarQube AI Agent — Login</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%23e82276'/><g fill='none' stroke='%23fff' stroke-linecap='round'><path d='M5 15 A 6 6 0 0 1 11 21' stroke-width='1.8'/><path d='M5 10 A 11 11 0 0 1 16 21' stroke-width='2.2'/><path d='M5 5 A 16 16 0 0 1 21 21' stroke-width='2.6'/></g></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #ffffff;
+    color: #1a1a1a;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: #1565c0; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: #0d47a1; }
+
+  .bn-login { display: flex; min-height: 100vh; }
+
+  /* ══ LEFT PANEL ══════════════════════════════════════════════════════════ */
+  .bn-left {
+    flex: 0 0 50%;
+    display: flex;
+    flex-direction: column;
+    padding: 32px 48px 24px;
+    background: #ffffff;
+  }
+  .bn-logo img { height: 46px; width: auto; }
+
+  .bn-form-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 400px;
+    width: 100%;
+    margin: 0 auto;
+    padding-bottom: 16px;
+  }
+  .bn-title {
+    font-size: 33px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 4px;
+    line-height: 1.18;
+    letter-spacing: -.02em;
+  }
+  .bn-title span { display: block; font-size: 20px; font-weight: 500; color: #6b6b6b; letter-spacing: 0; }
+  .bn-subtitle { font-size: 14px; color: #555555; margin: 10px 0 26px; line-height: 1.5; }
+
+  /* Floating-label field */
+  .bn-field { position: relative; margin-bottom: 22px; }
+  .bn-label {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: 15px; color: rgba(0,0,0,.5); background: transparent;
+    pointer-events: none; z-index: 1; line-height: 1;
+    transition: top .18s ease, font-size .18s ease, color .18s ease, padding .18s ease;
+  }
+  .bn-field.floating .bn-label,
+  .bn-field.focused .bn-label {
+    top: 0; font-size: 12px; color: rgba(0,0,0,.6);
+    background: #ffffff; padding: 0 4px; left: 10px;
+  }
+  .bn-field.focused .bn-label { color: #1565c0; }
+  .bn-field.errored .bn-label { color: #c62828; }
+
+  .bn-input {
+    width: 100%; padding: 15px 14px;
+    border: 1.5px solid rgba(0,0,0,.22); border-radius: 4px;
+    font-size: 15px; font-family: inherit; outline: none;
+    background: transparent; color: #1a1a1a;
+    transition: border-color .18s, border-width .1s;
+  }
+  .bn-field.focused .bn-input { border-color: #1565c0; border-width: 2px; }
+  .bn-field.errored .bn-input { border-color: #c62828; border-width: 2px; }
+  .bn-ferr { display: block; font-size: 12px; color: #c62828; margin: 4px 0 0 14px; }
+
+  /* Password reveal */
+  .bn-eye {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; color: rgba(0,0,0,.45);
+    padding: 4px; display: flex; align-items: center; z-index: 2;
+  }
+  .bn-eye:hover { color: #1565c0; }
+
+  .bn-options { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 18px; }
+  .bn-remember { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #444; cursor: pointer; user-select: none; }
+  .bn-remember input { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: #1565c0; }
+  .bn-forgot { font-size: 14px; background: none; border: none; cursor: pointer; font-family: inherit;
+               color: #1565c0; text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+
+  .bn-submit {
+    width: 100%; padding: 14px; background: #C8D800; border: none; border-radius: 4px;
+    font-size: 16px; font-weight: 700; color: #1a1a1a; cursor: pointer;
+    letter-spacing: .3px; font-family: inherit;
+    transition: background .2s, transform .1s;
+  }
+  .bn-submit:hover:not(:disabled) { background: #b5c200; }
+  .bn-submit:active:not(:disabled) { background: #a0ad00; transform: translateY(1px); }
+  .bn-submit:disabled { opacity: .65; cursor: not-allowed; }
+
+  .bn-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; }
+  .bn-divider-line { flex: 1; height: 1px; background: rgba(0,0,0,.15); }
+  .bn-divider-text { font-size: 13px; color: #777; white-space: nowrap; }
+
+  .bn-hint {
+    display: none; align-items: flex-start; gap: 10px;
+    padding: 12px 14px; background: #f4f7fb; border: 1px solid #dde6f1;
+    border-radius: 6px; color: #33475b; font-size: 12.5px; line-height: 1.6;
+  }
+  .bn-hint.show { display: flex; }
+  .bn-hint code { font-family: 'Courier New', monospace; background: #e6edf5; padding: 1px 5px; border-radius: 3px; }
+
+  .bn-error-bar {
+    display: none; align-items: center; gap: 10px;
+    padding: 12px 16px; background: #fdecea; border-radius: 6px;
+    color: #c62828; font-size: 14px; font-weight: 500; margin-bottom: 18px;
+  }
+  .bn-error-bar.show { display: flex; }
+
+  .bn-trouble-wrap { text-align: center; margin-top: 16px; }
+  .bn-trouble-link { font-size: 14px; background: none; border: none; cursor: pointer; font-family: inherit;
+                     color: #1565c0; text-decoration: underline; text-underline-offset: 2px; }
+
+  .bn-footer-text { text-align: center; font-size: 12px; color: #aaa; padding: 16px 0 4px; flex-shrink: 0; }
+
+  /* ══ RIGHT PANEL ═════════════════════════════════════════════════════════ */
+  .bn-right {
+    flex: 0 0 50%; position: relative; overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #23213f 0%, #14131f 45%, #0c0b13 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .bn-right::before {
+    content: ""; position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(circle at 78% 78%, rgba(212,49,140,.16) 0%, transparent 42%),
+      radial-gradient(circle at 18% 82%, rgba(75,95,199,.16) 0%, transparent 45%);
+  }
+
+  .bn-infographic { position: relative; z-index: 1; }
+  .bn-stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+    gap: 10px; position: relative; width: 500px;
+  }
+  .bn-stat-card {
+    border-radius: 16px; padding: 22px 20px 18px; color: #fff;
+    display: flex; flex-direction: column; min-height: 168px;
+    position: relative; overflow: hidden;
+    animation: cardIn .45s ease both;
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .bn-card-blue { background: linear-gradient(145deg, #4B5FC7 0%, #7B62C0 100%); }
+  .bn-card-pink { background: linear-gradient(145deg, #8B48C4 0%, #D4318C 100%); }
+  .bn-align-right { text-align: right; }
+  .bn-stat-value { font-size: 27px; font-weight: 700; line-height: 1.1; margin-bottom: 6px; letter-spacing: -.02em; }
+  .bn-stat-desc { font-size: 13px; line-height: 1.45; opacity: .92; flex: 1; }
+  .bn-stat-ico { margin-top: 12px; opacity: .85; }
+  .bn-ico-right { display: flex; justify-content: flex-end; }
+
+  .bn-center-circle {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 172px; height: 172px; border-radius: 50%; background: #fff;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    z-index: 10; box-shadow: 0 8px 32px rgba(0,0,0,.4); padding: 18px;
+  }
+  .bn-center-circle p { margin: 0; font-size: 13px; line-height: 1.45; color: #1a1a1a; }
+  .bn-center-circle strong { display: block; font-weight: 700; font-size: 13.5px; margin-top: 3px; letter-spacing: .02em; }
+  .bn-center-logo { display: flex; justify-content: center; margin-bottom: 7px; }
+
+  .bn-slide-label {
+    position: relative; z-index: 1; margin-top: 26px; text-align: center;
+    font-size: 12px; letter-spacing: .16em; font-weight: 600;
+    color: rgba(255,255,255,.55); text-transform: uppercase;
+  }
+
+  .bn-dots {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; align-items: center; z-index: 1;
+  }
+  .bn-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.55); background: transparent;
+    cursor: pointer; padding: 0;
+    transition: background .22s, border-color .22s, transform .15s;
+  }
+  .bn-dot.active { background: #e91f76; border-color: #e91f76; transform: scale(1.2); }
+  .bn-dot:hover:not(.active) { border-color: rgba(255,255,255,.85); }
+
+  /* ══ RESPONSIVE ══════════════════════════════════════════════════════════ */
+  @media (max-width: 980px) {
+    .bn-right { display: none; }
+    .bn-left { flex: 1; padding: 32px 28px; }
+    .bn-form-wrap { max-width: 100%; }
+  }
+  @media (max-width: 480px) {
+    .bn-left { padding: 28px 20px; }
+    .bn-title { font-size: 26px; }
+    .bn-title span { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bn-login">
+
+  <!-- ══ LEFT — credentials ══════════════════════════════════════════════ -->
+  <div class="bn-left">
+    <div class="bn-logo"><img src="/bn-logo.svg" alt="BusinessNext"></div>
+
+    <div class="bn-form-wrap">
+      <h1 class="bn-title">SonarQube AI Agent <span></span></h1>
+      <p class="bn-subtitle">Enter your credentials to access your account</p>
+
+      <div class="bn-error-bar" id="err-bar">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="err-text"></span>
+      </div>
+
+      <form id="login-form" novalidate>
+        <div class="bn-field" id="f-user">
+          <label class="bn-label" for="username">Username</label>
+          <input id="username" class="bn-input" type="text" autocomplete="username" autofocus>
+          <span class="bn-ferr" id="e-user"></span>
+        </div>
+
+        <div class="bn-field" id="f-pwd">
+          <label class="bn-label" for="password">Password</label>
+          <input id="password" class="bn-input" type="password" autocomplete="current-password" style="padding-right:44px">
+          <button type="button" class="bn-eye" id="toggle-pwd" aria-label="Show password">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+          <span class="bn-ferr" id="e-pwd"></span>
+        </div>
+
+        <div class="bn-options">
+          <label class="bn-remember"><input type="checkbox" id="remember">Remember me</label>
+          <button type="button" class="bn-forgot" id="forgot-btn">Forgot Password?</button>
+        </div>
+
+        <button type="submit" class="bn-submit" id="submit-btn">Login</button>
+
+        <div class="bn-divider">
+          <span class="bn-divider-line"></span>
+          <span class="bn-divider-text">account help</span>
+          <span class="bn-divider-line"></span>
+        </div>
+
+        <div class="bn-hint" id="hint-forgot">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" style="flex-shrink:0;margin-top:1px">
+            <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <strong>Password resets are done by an administrator.</strong><br>
+            Ask an admin to set a new password for you from <em>Admin → User Management</em>. If no admin can sign in,
+            stop the agent, delete <code>data/users.json</code> and restart — a fresh admin account is created and its
+            password printed to the server console.
+          </div>
+        </div>
+
+        <div class="bn-hint" id="hint-trouble">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" style="flex-shrink:0;margin-top:1px">
+            <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <strong>Can't get in?</strong><br>
+            • Accounts are local to this agent — your GitHub or BusinessNext credentials will not work here.<br>
+            • After 8 failed attempts the agent blocks that address for 15 minutes.<br>
+            • A disabled account reports the same message as a wrong password — check with an admin.
+          </div>
+        </div>
+
+        <div class="bn-trouble-wrap">
+          <button type="button" class="bn-trouble-link" id="trouble-btn">Having Trouble Logging In?</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="bn-footer-text">© Copyright 2026, BusinessNext CDG. All rights reserved.</div>
+  </div>
+
+  <!-- ══ RIGHT — what the agent does ═════════════════════════════════════ -->
+  <div class="bn-right">
+    <div class="bn-infographic">
+      <div class="bn-stats-grid" id="stats-grid"></div>
+      <div class="bn-slide-label" id="slide-label"></div>
+    </div>
+    <div class="bn-dots" id="dots"></div>
+  </div>
+
+</div>
+
+<script>
+// ── Floating labels ─────────────────────────────────────────────────────────
+['username', 'password'].forEach(id => {
+  const input = document.getElementById(id);
+  const field = input.closest('.bn-field');
+  const sync  = () => field.classList.toggle('floating', input.value.length > 0);
+  input.addEventListener('focus', () => field.classList.add('focused'));
+  input.addEventListener('blur',  () => { field.classList.remove('focused'); sync(); });
+  input.addEventListener('input', () => { field.classList.remove('errored'); sync(); hideError(); });
+  sync();
+});
+
+document.getElementById('toggle-pwd').addEventListener('click', () => {
+  const pwd = document.getElementById('password');
+  pwd.type = pwd.type === 'password' ? 'text' : 'password';
+});
+
+// ── Help panels ─────────────────────────────────────────────────────────────
+const toggleHint = (btnId, hintId) => {
+  document.getElementById(btnId).addEventListener('click', () => {
+    const hint = document.getElementById(hintId);
+    const showing = hint.classList.toggle('show');
+    // Only one panel open at a time
+    ['hint-forgot', 'hint-trouble'].forEach(id => { if (id !== hintId) document.getElementById(id).classList.remove('show'); });
+    if (showing) hint.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+};
+toggleHint('forgot-btn', 'hint-forgot');
+toggleHint('trouble-btn', 'hint-trouble');
+
+// ── Errors ──────────────────────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('err-text').textContent = msg;
+  document.getElementById('err-bar').classList.add('show');
+}
+function hideError() {
+  document.getElementById('err-bar').classList.remove('show');
+  document.getElementById('e-user').textContent = '';
+  document.getElementById('e-pwd').textContent = '';
+}
+
+// ── Submit ──────────────────────────────────────────────────────────────────
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  hideError();
+
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  let bad = false;
+
+  if (!username) {
+    document.getElementById('f-user').classList.add('errored');
+    document.getElementById('e-user').textContent = 'Username is required';
+    bad = true;
+  }
+  if (!password) {
+    document.getElementById('f-pwd').classList.add('errored');
+    document.getElementById('e-pwd').textContent = 'Password is required';
+    bad = true;
+  }
+  if (bad) return;
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  try {
+    const res  = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, remember: document.getElementById('remember').checked })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      showError(data.error || 'Sign-in failed. Please try again.');
+      document.getElementById('f-pwd').classList.add('errored');
+      btn.disabled = false;
+      btn.textContent = 'Login';
+      return;
+    }
+    window.location.href = '/';
+  } catch (_) {
+    showError('Cannot reach the agent. Is the server running?');
+    btn.disabled = false;
+    btn.textContent = 'Login';
+  }
+});
+
+// ── Right-panel carousel ────────────────────────────────────────────────────
+// Every figure below is a property of how this agent actually runs — not a
+// marketing projection.
+const ICONS = {
+  pipeline: '<path d="M3 12h4l3-7 4 14 3-7h4"></path>',
+  branch:   '<line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path>',
+  rating:   '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>',
+  click:    '<path d="M9 11.5V6a2 2 0 1 1 4 0v5"></path><path d="M13 11V4.5a2 2 0 1 1 4 0V13"></path><path d="M17 11.5a2 2 0 1 1 4 0v3a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7v-4a2 2 0 1 1 4 0"></path>',
+  robot:    '<rect x="4" y="8" width="16" height="12" rx="2"></rect><circle cx="9" cy="14" r="1.4"></circle><circle cx="15" cy="14" r="1.4"></circle><line x1="12" y1="4" x2="12" y2="8"></line>',
+  shield:   '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>',
+  code:     '<polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline>',
+  json:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline>',
+  lock:     '<rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>',
+  laptop:   '<rect x="3" y="4" width="18" height="12" rx="2"></rect><line x1="2" y1="20" x2="22" y2="20"></line>',
+  server:   '<rect x="2" y="3" width="20" height="8" rx="2"></rect><rect x="2" y="13" width="20" height="8" rx="2"></rect><line x1="6" y1="7" x2="6.01" y2="7"></line><line x1="6" y1="17" x2="6.01" y2="17"></line>',
+  bug:      '<rect x="8" y="6" width="8" height="14" rx="4"></rect><path d="M19 7l-3 2M5 7l3 2M19 13h-3M5 13h3M19 19l-3-2M5 19l3-2"></path>',
+  mail:     '<rect x="2" y="4" width="20" height="16" rx="2"></rect><polyline points="22,6 12,13 2,6"></polyline>',
+  history:  '<circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 14"></polyline>',
+  list:     '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>',
+  users:    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>'
+};
+
+const SLIDES = [
+  { label: 'Scan Pipeline', cards: [
+    { v: '6',      d: 'Pipeline stages from<br>repo to notification', i: 'pipeline' },
+    { v: '3',      d: 'Scanner phases:<br>Begin → Build → End',        i: 'branch'   },
+    { v: 'A–E',    d: 'Reliability, Security &<br>Maintainability ratings', i: 'rating' },
+    { v: '1-click', d: 'Launch the whole flow<br>from any branch',     i: 'click'    }
+  ]},
+  { label: 'AI Review', cards: [
+    { v: 'Level 1', d: 'AI review on top of<br>every SonarQube scan', i: 'robot' },
+    { v: '0',       d: 'Source code lines<br>ever sent to the AI',    i: 'code'  },
+    { v: 'Claude',  d: 'Sonnet 4.5 reasoning<br>over the findings',   i: 'robot' },
+    { v: 'JSON',    d: 'Structured issues with<br>a fix for each one', i: 'json' }
+  ]},
+  { label: 'Security Posture', cards: [
+    { v: '0',         d: 'Secret values captured —<br>file and line only', i: 'lock'   },
+    { v: '100%',      d: 'Analysis runs locally on<br>your own machine',   i: 'laptop' },
+    { v: '127.0.0.1', d: 'Agent bound to loopback,<br>never the network',  i: 'server' },
+    { v: 'OWASP',     d: 'Vulnerability coverage<br>through SonarQube',    i: 'bug'    }
+  ]},
+  { label: 'Delivery & Control', cards: [
+    { v: 'Email',  d: 'Consolidated report sent<br>on every review',  i: 'mail'    },
+    { v: '30',     d: 'Reviews kept in the<br>server-side history',   i: 'history' },
+    { v: 'JSON',   d: 'Exportable audit trail<br>of dashboard actions', i: 'list'  },
+    { v: '3 roles', d: 'Admin, Reviewer and<br>Viewer access levels',  i: 'users'  }
+  ]}
+];
+
+const grid  = document.getElementById('stats-grid');
+const dots  = document.getElementById('dots');
+const label = document.getElementById('slide-label');
+let slideIdx = 0, timer = null;
+
+function renderSlide(n) {
+  slideIdx = n;
+  const slide = SLIDES[n];
+  label.textContent = slide.label;
+  grid.innerHTML = slide.cards.map((c, i) => {
+    const pink  = i === 1 || i === 3;
+    const right = pink ? ' bn-align-right' : '';
+    return `
+      <div class="bn-stat-card ${pink ? 'bn-card-pink' : 'bn-card-blue'}${right}" style="animation-delay:${i * 60}ms">
+        <div class="bn-stat-value">${c.v}</div>
+        <div class="bn-stat-desc">${c.d}</div>
+        <div class="bn-stat-ico${pink ? ' bn-ico-right' : ''}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+               stroke-linecap="round" stroke-linejoin="round" width="27" height="27">${ICONS[c.i]}</svg>
+        </div>
+      </div>`;
+  }).join('') + `
+    <div class="bn-center-circle">
+      <p>
+        <span class="bn-center-logo">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#e82276" stroke-linecap="round">
+            <path d="M4 14.5 A 6.5 6.5 0 0 1 10.5 21" stroke-width="1.9"/>
+            <path d="M4 9 A 12 12 0 0 1 16 21" stroke-width="2.3"/>
+            <path d="M4 3.5 A 17.5 17.5 0 0 1 21.5 21" stroke-width="2.7"/>
+          </svg>
+        </span>
+        Unleash the Power of
+        <strong>SONARQUBE AI</strong>
+      </p>
+    </div>`;
+
+  [...dots.children].forEach((d, i) => d.classList.toggle('active', i === n));
+}
+
+function goTo(n, restart = true) {
+  renderSlide((n + SLIDES.length) % SLIDES.length);
+  if (restart) startAuto();
+}
+function startAuto() {
+  clearInterval(timer);
+  timer = setInterval(() => goTo(slideIdx + 1, false), 6000);
+}
+
+dots.innerHTML = SLIDES.map((s, i) =>
+  `<button class="bn-dot" aria-label="${s.label}"></button>`).join('');
+[...dots.children].forEach((d, i) => d.addEventListener('click', () => goTo(i)));
+
+renderSlide(0);
+startAuto();
+</script>
+</body>
+</html>

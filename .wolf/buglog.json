@@ -436,6 +436,66 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T00:00:00.000Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-08-12T15:36:00.000Z",
+      "error_message": "Quality rating badges rendered as '1.0' / '2.0' instead of A–E letters, and the rating-X CSS class never matched",
+      "file": "public/index.html",
+      "root_cause": "SonarQube's /api/measures/component returns reliability_rating, security_rating and sqale_rating as numeric strings ('1.0'..'5.0'), not letters. The frontend interpolated the raw value straight into both the badge text and the class name: class=\"rating rating-${m.reliability_rating||'A'}\" produced the non-existent class 'rating-1.0'.",
+      "fix": "Added a ratingLetter(v) helper in public/index.html that maps 1..5 to A..E (and passes through values that are already letters), used everywhere a rating is displayed — the scan-complete result panel and the new Scan History table.",
+      "tags": ["sonarqube", "metrics", "ratings", "frontend", "css-class"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T15:36:00.000Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-08-12T15:20:00.000Z",
+      "error_message": "Overview cards 'AZURE ORG' and project name always showed '—'",
+      "file": "public/index.html",
+      "root_cause": "Leftover from the Azure DevOps era: the frontend read cfg.org and cfg.project from /api/config, but the GitHub-based server only returns githubUsername, sonarUrl and repoBasePath. Those keys never existed, so the cards were permanently empty. Several other Azure labels were also stale ('Fetching from Azure DevOps...', 'Azure API unreachable', fa-microsoft pipeline icon).",
+      "fix": "Rewrote config handling into loadServerConfig()/applyServerConfig(); the tile now shows the GitHub account from cfg.githubUsername. Extended /api/config in server.js with integration status booleans (githubConfigured, sonarConfigured, aiConfigured, smtpConfigured), aiModel, notifyEmail and smtpHost — booleans only, never secret values. Replaced all remaining Azure DevOps wording and the fa-microsoft icon with GitHub equivalents.",
+      "tags": ["azure-leftover", "api-config", "github", "frontend"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T15:20:00.000Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-08-12T15:25:00.000Z",
+      "error_message": "Potential TypeError on scan completion: document.getElementById('recent-scans').innerHTML after the sidebar rebuild removed that element",
+      "file": "public/index.html",
+      "root_cause": "The scan-complete socket handler wrote into a 'recent-scans' sidebar block. The dashboard rebuild replaced the sidebar with grouped navigation and dropped that element, which would have thrown on the next completed scan.",
+      "fix": "Replaced the sidebar write with recordScanRun(), which persists the run to localStorage ('sonarai.scanHistory') and feeds both the Scan History page and the Overview 'Latest Scan Runs' card. Also added an id-reference audit (all getElementById/$ calls cross-checked against ids present in the file) to catch this class of breakage after markup edits.",
+      "tags": ["dom", "refactor", "null-reference", "scan-complete"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T15:25:00.000Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-08-12T16:48:00.000Z",
+      "error_message": "A viewer or reviewer could never change their own password",
+      "file": "server.js",
+      "root_cause": "changeOwnPassword() initially called PATCH /api/users/:id, which is guarded by requirePerm('users.edit'). Only admins hold that permission, so every non-admin got a 403 when rotating their own credentials.",
+      "fix": "Added POST /api/auth/password — session-only (no permission required), but requires the current password and enforces the 8-character minimum. The frontend self-service form now posts there; the admin reset path via PATCH /api/users/:id is unchanged.",
+      "tags": ["auth", "permissions", "rbac", "password"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T16:48:00.000Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-08-12T17:03:00.000Z",
+      "error_message": "User Management showed 'Total Users 0 / Admins 0 / Active 0' to viewers and reviewers",
+      "file": "public/index.html",
+      "root_cause": "The four stat tiles stayed visible for roles without users.view. Since loadUsers() returns early for those roles, the tiles kept their initial 0 values — reading as 'this agent has no users' rather than 'you cannot see this'.",
+      "fix": "Gave the tile row id 'um-tiles' and hid it in gateUiByPermission() whenever users.view is absent, leaving only the explanatory permission-denied note.",
+      "tags": ["rbac", "ui", "misleading-empty-state"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T17:03:00.000Z"
     }
   ]
 }

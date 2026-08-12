@@ -209,3 +209,13 @@
 | 11:29 | Edited server.js | modified if() | ~451 |
 | 11:38 | Session end: 36 writes across 2 files (server.js, index.html) | 3 reads | ~52994 tok |
 | 11:42 | Session end: 36 writes across 2 files (server.js, index.html) | 3 reads | ~52994 tok |
+| 15:11 | designqc: captured 2 screenshots (106KB, ~5000 tok) | / | ready for eval | ~0 |
+| 15:25 | Dashboard shell rebuild — full-height sidebar, grouped nav (Workspace/Operations/AI/Platform/Admin), SonarQube logo + BUSINESSNEXT CDG brand, operator footer | public/index.html | done | ~9800 |
+| 15:30 | Added 11 new views: Scan History, Quality Gate, AI Insights, SonarQube Server, Integrations + 6 Admin pages | public/index.html | done | ~14200 |
+| 15:33 | /api/config extended with integration status booleans + AI_MODEL const | server.js | done | ~900 |
+| 15:36 | Fixed rating letters (Sonar returns "1.0" not "A") via ratingLetter() | public/index.html | bug fix | ~600 |
+| 15:40 | Verified all 15 views with puppeteer — 0 console errors | public/index.html | verified | ~5200 |
+| 16:35 | Auth backend: scrypt password hashing, HMAC session cookies, roles admin/reviewer/viewer, 12 permissions | server.js | done | ~7400 |
+| 16:42 | Login page built from BusinessNext reference (4.png + Login_infra.html) with BN logo + 4-slide carousel | public/login.html, public/bn-logo.svg | done | ~6100 |
+| 16:50 | User Management rewired to real CRUD; UI permission gating; self-service password endpoint | public/index.html, server.js | done | ~5800 |
+| 16:58 | Verified: unauth redirect, bad login, admin CRUD, last-admin guards, reviewer/viewer 403s | puppeteer + curl | verified | ~4200 |

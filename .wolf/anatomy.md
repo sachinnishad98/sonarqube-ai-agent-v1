@@ -61,4 +61,6 @@
 
 ## public/
 
-- `index.html` — SonarQube AI Agent • CRMnext DevOps Agent (~23411 tok)
+- `index.html` — Single-file dashboard SPA. Views are `<div id="view-*">` blocks toggled by `showView()` off the `VIEW_META` registry; sidebar has 5 nav groups (Workspace/Operations/AI/Platform/Admin). Auth-gated: boots off `/api/auth/me`, redirects to `/login` without a session. (~44000 tok)
+- `login.html` — BusinessNext-styled split login page. Left: BN logo + "SonarQube AI Agent (Login)" + floating-label form posting to `/api/auth/login`. Right: dark panel with a 4-slide carousel of gradient stat cards. (~5200 tok)
+- `bn-logo.svg` — BusinessNext wordmark, used on the login page (~4400 tok)

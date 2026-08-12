@@ -9,6 +9,9 @@
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 
 - **Hindi-English Mix:** User prefers Hindi-English communication style (Hinglish)
+- **Reference screenshots for UI work (2026-08-12):** User drops reference screenshots in `D:\SonarQube\ErrorPng\` (1.png, 2.png, …) and expects them read and matched *structurally*, not copy-pasted. Explicit instruction: "copy paste mat karna — mere sonarqube agent se related jo hoga wahi rakhna" — adapt every label/column/section to this agent's own domain (repos, branches, scans, AI reviews), never carry over the reference app's domain nouns.
+- **Branding (2026-08-12):** Product name "SonarQube AI Agent", business unit line "BUSINESSNEXT CDG" underneath, SonarQube three-arc mark (inline SVG, white on the pink gradient tile) as the logo. Pink is #E82276.
+- **Dashboards should look "bhara" (full):** User dislikes sparse pages — wants stat tiles, tables, grouped nav and real content on every screen rather than placeholder panels.
 - **Security Focus:** User wants comprehensive security scanning including secrets, API keys, passwords detection
 - **Detailed Metrics:** User wants detailed code metrics displayed prominently (total lines, secrets found/not found)
 - **Visual Feedback:** User prefers visual indicators (blocks, badges) for security scan results
@@ -23,6 +26,12 @@
   - Claude AI prompt updated to scan for hardcoded credentials: password=, api_key=, token=, secret=, connection strings
   - Email report HTML includes dedicated "Secrets Scan" section with color-coded results (red for found, green for clean)
   - Total code lines tracked throughout analysis pipeline and displayed in stats row
+
+- **Frontend architecture (2026-08-12):** `public/index.html` is a single-file SPA — no build step. Views are `<div id="view-<name>">` blocks toggled by `showView()`, driven by the `VIEW_META` registry (title/subtitle/owning nav group). To add a page: add the markup block, a `VIEW_META` entry, a `nav-<name>` sidebar item, and (optionally) a `render<Name>()` called from `showView`.
+- **Browser-local state (2026-08-12):** Dashboard preferences, scan history, audit trail and the operator profile live in `localStorage` under `sonarai.*` keys. Anything not backed by the server is labelled "this device" / "local" in the UI on purpose — do not present local-only screens as if they were server features.
+- **Auth model (2026-08-12):** Local accounts in `data/users.json` (gitignored) — scrypt hash + per-user salt, never plaintext. Sessions are stateless `base64url(payload).HMAC` cookies (`sai_session`) signed with a secret generated on first boot and stored alongside the users. No auth npm packages; everything uses node's `crypto`. First boot prints a generated admin password to the console once — or reads `ADMIN_USERNAME`/`ADMIN_PASSWORD`/`ADMIN_NAME`/`ADMIN_EMAIL` from `.env`. To recover a locked-out agent: stop it, delete `data/users.json`, restart.
+- **Roles & permissions (2026-08-12):** `admin` = `['*']` (expands to every entry in `ALL_PERMISSIONS`), `reviewer` = repos/reports view + scan.run + review.run + projects.edit + audit.view, `viewer` = repos.view + reports.view. Server enforces via `requirePerm(perm)` on REST routes and `socketAllowed(socket, perm, failEvent)` on socket events — the frontend `can()` gating is convenience only. Guards prevent demoting/disabling/deleting the last active admin and self-deletion.
+- **Screenshotting views (2026-08-12):** `openwolf designqc` only captures route `/`, so it can't reach the client-side views. Use puppeteer-core from `C:\Users\SachinNishad\AppData\Roaming\npm\node_modules\openwolf\node_modules\puppeteer-core` with `executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe'`, then `page.evaluate(n => showView(n), name)` between screenshots.
 
 ## Do-Not-Repeat
 

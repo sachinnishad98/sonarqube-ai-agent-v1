@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SonarQube AI Agent • CRMnext DevOps Agent</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%23e82276'/><g fill='none' stroke='%23fff' stroke-linecap='round'><path d='M5 15 A 6 6 0 0 1 11 21' stroke-width='1.8'/><path d='M5 10 A 11 11 0 0 1 16 21' stroke-width='2.2'/><path d='M5 5 A 16 16 0 0 1 21 21' stroke-width='2.6'/></g></svg>">
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
@@ -40,15 +41,128 @@
     z-index: -1;
   }
 
+  /* Local .hidden — do not depend on the Tailwind CDN being reachable */
+  .hidden { display: none !important; }
+
+  /* ── App shell: full-height sidebar | (topbar + content) | right panel ───── */
+  .app-shell { display: flex; height: 100vh; overflow: hidden; }
+  .app-main  { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
   /* Sidebar */
-  .sidebar { width: 240px; background: #ffffff; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: all .2s; color: #111111; font-size: 14px; margin: 2px 8px; font-weight: 500; }
-  .nav-item:hover { background: rgba(232,34,118,.08); color: #000000; }
-  .nav-item.active { background: #e82276; color: #ffffff; }
-  .nav-item.disabled { cursor: not-allowed; opacity: .4; }
+  .sidebar { width: 254px; background: #ffffff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; transition: width .2s ease; }
+  .sidebar-scroll { flex: 1; overflow-y: auto; padding: 6px 0 12px; }
+
+  /* Brand block (logo + product name + business unit) */
+  .brand { display: flex; align-items: center; gap: 11px; padding: 15px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .brand-logo { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg,#ff3d93,#c4145c); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(232,34,118,.30); }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -.015em; line-height: 1.2; white-space: nowrap; }
+  .brand-sub  { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: .1em; margin-top: 2px; white-space: nowrap; }
+  .icon-btn { background: none; border: 1px solid var(--border); border-radius: 8px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: pointer; flex-shrink: 0; transition: all .18s; font-size: 13px; }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(232,34,118,.06); }
+
+  /* Nav groups */
+  .nav-group-title { display: flex; align-items: center; padding: 12px 18px 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .11em; color: #8d8d8d; cursor: pointer; user-select: none; }
+  .nav-group-title:hover { color: var(--accent); }
+  .nav-group-title .chev { margin-left: auto; font-size: 10px; transition: transform .2s; }
+  .nav-group.collapsed .chev { transform: rotate(-90deg); }
+  .nav-group.collapsed .nav-group-items { display: none; }
+
+  .nav-item { display: flex; align-items: center; gap: 11px; padding: 9px 16px; border-radius: 10px; cursor: pointer; transition: all .18s; color: #444; font-size: 13.5px; margin: 1px 8px; font-weight: 500; white-space: nowrap; }
+  .nav-item i { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
+  .nav-item:hover { background: rgba(232,34,118,.07); color: #000000; }
+  .nav-item.active { background: #e82276; color: #ffffff; box-shadow: 0 3px 10px rgba(232,34,118,.28); }
+  .nav-item.disabled { cursor: not-allowed; opacity: .45; }
+  .nav-item.disabled:hover { background: none; color: #444; }
+  .nav-badge { margin-left: auto; font-size: 9px; background: rgba(0,0,0,.06); color: var(--muted); padding: 2px 6px; border-radius: 5px; font-weight: 700; }
+  .nav-item.active .nav-badge { background: rgba(255,255,255,.25); color: #fff; }
+
+  /* Sidebar footer — operator profile */
+  .side-user { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg,#ff3d93,#c4145c); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+  /* Collapsed rail */
+  .sidebar.collapsed { width: 74px; }
+  .sidebar.collapsed .brand { justify-content: center; padding: 15px 8px; }
+  .sidebar.collapsed .brand-text,
+  .sidebar.collapsed .nav-group-title,
+  .sidebar.collapsed .nav-label,
+  .sidebar.collapsed .nav-badge,
+  .sidebar.collapsed .user-text,
+  .sidebar.collapsed .collapse-btn { display: none; }
+  .sidebar.collapsed .nav-group.collapsed .nav-group-items { display: block; }
+  .sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; margin: 2px 10px; }
+  .sidebar.collapsed .side-user { justify-content: center; }
 
   /* Topbar */
-  .topbar { background: #ffffff; border-bottom: 1px solid var(--border); height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .topbar { background: #ffffff; border-bottom: 1px solid var(--border); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 16px; flex-shrink: 0; }
+
+  /* ── Reusable page furniture ─────────────────────────────────────────────── */
+  .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .page-title { font-size: 24px; font-weight: 700; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+  .page-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .card-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .card-note { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+  @media (max-width: 1180px) { .grid-4 { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+  @media (max-width: 900px)  { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+
+  /* Stat tile with icon chip */
+  .tile { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: all .2s; }
+  .tile:hover { border-color: rgba(232,34,118,.35); box-shadow: 0 6px 18px rgba(232,34,118,.09); }
+  .tile-icon { width: 44px; height: 44px; border-radius: 13px; background: rgba(232,34,118,.10); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+  .tile-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .tile-value { font-size: 25px; font-weight: 700; letter-spacing: -.025em; line-height: 1.25; }
+
+  /* Data table */
+  .table-wrap { background: #fff; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .table-scroll { overflow-x: auto; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; font-size: 10.5px; letter-spacing: .09em; color: var(--muted); font-weight: 700; padding: 13px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .data-table td { padding: 13px 16px; border-bottom: 1px solid #f3f3f3; vertical-align: middle; white-space: nowrap; }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover { background: #fafafa; }
+  .empty-state { text-align: center; padding: 46px 20px; color: var(--muted); font-size: 13px; }
+
+  /* Pills */
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .pill-ok   { background: #e8f8ee; color: #12783f; }
+  .pill-fail { background: rgba(232,34,118,.10); color: #c4145c; }
+  .pill-warn { background: #fff5e6; color: #97600a; }
+  .pill-idle { background: rgba(0,0,0,.05); color: var(--muted); }
+
+  /* Stage dots */
+  .stage-dots { display: inline-flex; gap: 4px; }
+  .stage-dot { width: 9px; height: 9px; border-radius: 3px; background: #22c55e; }
+  .stage-dot.pending { background: #e4e4e4; }
+  .stage-dot.fail    { background: #e82276; }
+
+  /* Toggle switch */
+  .switch { position: relative; width: 40px; height: 22px; border-radius: 999px; background: #dcdcdc; cursor: pointer; transition: background .2s; flex-shrink: 0; border: none; }
+  .switch.on { background: var(--accent); }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .switch.on::after { left: 21px; }
+  .setting-row { display: flex; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid #f3f3f3; }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-name { font-size: 13px; font-weight: 600; }
+  .setting-desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+
+  /* "local only" disclosure strip */
+  .local-note { display: flex; align-items: flex-start; gap: 9px; background: rgba(0,0,0,.03); border: 1px dashed var(--border); border-radius: 12px; padding: 11px 14px; font-size: 11.5px; color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
+  .local-note i { color: var(--accent); margin-top: 2px; }
+
+  /* Key/value list */
+  .kv { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid #f3f3f3; font-size: 12.5px; }
+  .kv:last-child { border-bottom: none; }
+  .kv-k { color: var(--muted); }
+  .kv-v { font-family: 'Space Mono', monospace; font-size: 11.5px; text-align: right; word-break: break-all; }
+
+  /* Mini bar chart */
+  .bar-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12px; }
+  .bar-track { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg,#e82276,#ff6aa8); border-radius: 4px; }
 
   /* Cards */
   .stat-card { background: #ffffff; border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
@@ -73,7 +187,7 @@
   .badge-minor    { background: rgba(0,0,0,.04); color: #666666; border: 1px solid rgba(0,0,0,.12); }
 
   /* Right panel */
-  .right-panel { width: 850px; background: #ffffff; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; box-shadow: -2px 0 8px rgba(0,0,0,.05); }
+  .right-panel { width: 850px; max-width: 46vw; min-width: 420px; flex-shrink: 0; background: #ffffff; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; box-shadow: -2px 0 8px rgba(0,0,0,.05); }
   .right-panel.hidden { display: none; }
 
   /* Log terminal */
@@ -122,6 +236,23 @@
   .step-error    .step-dot { background: rgba(232,34,118,.2); color: var(--danger); }
   @keyframes pulseBorder { 0%,100%{box-shadow:0 0 0 0 rgba(232,34,118,.4)} 50%{box-shadow:0 0 0 4px rgba(232,34,118,0)} }
 
+  /* Pipeline flow connector — animated left-to-right arrows, passing through icon centers */
+  .pipeline-track { display:flex; align-items:flex-start; gap:0; overflow-x:auto; }
+  .pipeline-node { display:flex; flex-direction:column; align-items:center; gap:6px; min-width:84px; transition:transform .2s ease; }
+  .pipeline-node:hover { transform:translateY(-2px); }
+  .pipeline-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:16px; transition:box-shadow .2s ease; position:relative; z-index:2; }
+  .pipeline-node:hover .pipeline-icon { box-shadow:0 0 0 4px rgba(22,163,74,.15); }
+  .pipeline-connector { position:relative; flex:1; height:2px; min-width:28px; margin:19px 4px 0 4px; border-radius:2px; background:rgba(0,0,0,.08); overflow:visible; z-index:1; }
+  .pipeline-connector .flow-arrow { position:absolute; top:50%; left:0%; transform:translateY(-50%); color:#16a34a; font-size:16px; font-weight:900; text-shadow:0 0 6px rgba(22,163,74,.5); opacity:0; animation:flowArrow 2.4s cubic-bezier(.4,0,.2,1) infinite; }
+  .pipeline-connector .flow-arrow:nth-child(2) { animation-delay:.8s; }
+  .pipeline-connector .flow-arrow:nth-child(3) { animation-delay:1.6s; }
+  @keyframes flowArrow {
+    0%   { left:0%; opacity:0; }
+    12%  { opacity:1; }
+    85%  { opacity:1; }
+    100% { left:calc(100% - 11px); opacity:0; }
+  }
+
   .main-content { flex: 1; overflow-y: auto; padding: 24px; }
   input[type=text], input[type=search] { background: var(--card); border: 1px solid var(--border); border-radius: 10px; color: var(--text); padding: 8px 14px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
   input:focus { border-color: var(--accent); }
@@ -130,61 +261,124 @@
 </head>
 <body>
 
-<!-- TOPBAR -->
-<div class="topbar">
-  <div style="display:flex;align-items:center;gap:12px">
-    <div style="width:36px;height:36px;background:linear-gradient(135deg,#e82276,#e82276);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;font-family:'Space Mono',monospace;color:#000">SA</div>
-    <div>
-      <div style="font-weight:700;font-size:15px">SonarQube AI Agent</div>
-      <div style="font-size:11px;color:var(--muted)">DevOps Code Quality Agent</div>
+<div class="app-shell">
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+
+  <!-- Brand -->
+  <div class="brand">
+    <div class="brand-logo" title="SonarQube AI Agent">
+      <!-- SonarQube mark: three arcs radiating from the lower-left origin -->
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#ffffff" stroke-linecap="round">
+        <path d="M4 14.5 A 6.5 6.5 0 0 1 10.5 21" stroke-width="1.9"/>
+        <path d="M4 9 A 12 12 0 0 1 16 21"        stroke-width="2.3"/>
+        <path d="M4 3.5 A 17.5 17.5 0 0 1 21.5 21" stroke-width="2.7"/>
+      </svg>
     </div>
+    <div class="brand-text">
+      <div class="brand-name">SonarQube AI Agent</div>
+      <div class="brand-sub">BUSINESSNEXT CDG</div>
+    </div>
+    <button class="icon-btn collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
+      <i class="fa-solid fa-outdent"></i>
+    </button>
   </div>
-  <div style="display:flex;align-items:center;gap:20px">
-    <div id="conn-status" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+
+  <!-- Navigation -->
+  <div class="sidebar-scroll">
+
+    <div class="nav-group" id="group-workspace">
+      <div class="nav-group-title" onclick="toggleNavGroup('workspace')">WORKSPACE <i class="fa-solid fa-chevron-down chev"></i></div>
+      <div class="nav-group-items">
+        <div class="nav-item active" id="nav-overview" onclick="showView('overview')"><i class="fa-solid fa-house"></i><span class="nav-label">Overview</span></div>
+        <div class="nav-item" id="nav-repos"    onclick="showView('repos')"><i class="fa-solid fa-folder-tree"></i><span class="nav-label">Repositories</span><span class="nav-badge" id="nav-badge-repos">0</span></div>
+        <div class="nav-item" id="nav-branches" onclick="showView('branches')"><i class="fa-solid fa-code-branch"></i><span class="nav-label">Branches</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" id="group-operations">
+      <div class="nav-group-title" onclick="toggleNavGroup('operations')">OPERATIONS <i class="fa-solid fa-chevron-down chev"></i></div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-scans"        onclick="showView('scans')"><i class="fa-solid fa-wave-square"></i><span class="nav-label">Scan History</span><span class="nav-badge" id="nav-badge-scans">0</span></div>
+        <div class="nav-item" id="nav-quality-gate" onclick="showView('quality-gate')"><i class="fa-solid fa-gauge-high"></i><span class="nav-label">Quality Gate</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" id="group-ai">
+      <div class="nav-group-title" onclick="toggleNavGroup('ai')">AI INTELLIGENCE <i class="fa-solid fa-chevron-down chev"></i></div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-ai-reports"  onclick="showView('ai-reports')"><i class="fa-solid fa-shield-halved"></i><span class="nav-label">AI Reports</span><span class="nav-badge" id="nav-badge-reports">0</span></div>
+        <div class="nav-item" id="nav-ai-insights" onclick="showView('ai-insights')"><i class="fa-solid fa-brain"></i><span class="nav-label">AI Insights</span></div>
+        <div class="nav-item disabled" title="Not built yet"><i class="fa-solid fa-comments"></i><span class="nav-label">AI Chat</span><span class="nav-badge">SOON</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" id="group-platform">
+      <div class="nav-group-title" onclick="toggleNavGroup('platform')">PLATFORM <i class="fa-solid fa-chevron-down chev"></i></div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-sonar-server" onclick="showView('sonar-server')"><i class="fa-solid fa-server"></i><span class="nav-label">SonarQube Server</span></div>
+        <div class="nav-item" id="nav-integrations" onclick="showView('integrations')"><i class="fa-solid fa-plug"></i><span class="nav-label">Integrations</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" id="group-admin">
+      <div class="nav-group-title" onclick="toggleNavGroup('admin')">ADMIN <i class="fa-solid fa-chevron-down chev"></i></div>
+      <div class="nav-group-items">
+        <div class="nav-item" id="nav-pii"           onclick="showView('pii')"><i class="fa-solid fa-shield"></i><span class="nav-label">PII Settings</span></div>
+        <div class="nav-item" id="nav-tokens"        onclick="showView('tokens')"><i class="fa-solid fa-coins"></i><span class="nav-label">Token Usage</span></div>
+        <div class="nav-item" id="nav-notifications" onclick="showView('notifications')"><i class="fa-solid fa-bell"></i><span class="nav-label">Notifications</span></div>
+        <div class="nav-item" id="nav-users"         onclick="showView('users')"><i class="fa-solid fa-users"></i><span class="nav-label">User Management</span></div>
+        <div class="nav-item" id="nav-audit"         onclick="showView('audit')"><i class="fa-solid fa-clipboard-list"></i><span class="nav-label">Audit Trail</span></div>
+        <div class="nav-item" id="nav-settings"      onclick="showView('settings')"><i class="fa-solid fa-gear"></i><span class="nav-label">Settings</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Operator profile -->
+  <div class="side-user">
+    <div class="avatar" id="user-initials">AU</div>
+    <div class="user-text" style="min-width:0">
+      <div style="font-size:13px;font-weight:600" id="user-name">Admin User</div>
+      <div style="font-size:11px;color:var(--muted)" id="user-role">Administrator</div>
+    </div>
+    <button class="icon-btn" style="margin-left:auto" onclick="logout()" title="Sign out"><i class="fa-solid fa-right-from-bracket"></i></button>
+  </div>
+</aside>
+
+<div class="app-main">
+
+<!-- ══ TOPBAR ═══════════════════════════════════════════════════════════════ -->
+<header class="topbar">
+  <div style="min-width:0">
+    <div style="font-weight:700;font-size:15px" id="page-title">Overview</div>
+    <div style="font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="page-sub">GitHub → SonarQube Scan → Level 1 AI Review → Notify</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+    <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace" id="clock"></div>
+    <button class="icon-btn" style="width:auto;padding:0 12px;gap:7px;height:32px;font-size:12px;font-weight:600" onclick="refreshAll()" title="Reload repositories and reports">
+      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    </button>
+    <div class="pill pill-idle" id="conn-status" style="padding:6px 12px">
       <div class="pulse" id="conn-dot" style="background:var(--warning)"></div>
       <span id="conn-text">Connecting...</span>
     </div>
-    <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace" id="clock"></div>
   </div>
-</div>
-
-<div style="display:flex;height:calc(100vh - 56px)">
-
-<!-- SIDEBAR -->
-<div class="sidebar">
-  <div style="padding:16px 8px 8px">
-    <div style="padding:10px 16px;background:rgba(232,34,118,.06);border:1px solid rgba(232,34,118,.25);border-radius:12px;margin-bottom:16px">
-      <div style="font-size:11px;color:#e82276;margin-bottom:2px;font-weight:700">PROJECT</div>
-      <div style="font-weight:600;font-size:14px;color:#111111">Project Name(sachinnishad98)</div>
-      <div style="font-size:11px;color:#555555">Repository Name</div>
-    </div>
-
-    <div style="font-size:10px;color:var(--muted);padding:4px 16px 8px;font-weight:600;letter-spacing:.05em">NAVIGATION</div>
-
-    <div class="nav-item active" onclick="showView('overview')" id="nav-overview"><i class="fa-solid fa-house" style="width:16px"></i> Overview</div>
-    <div class="nav-item" onclick="showView('repos')" id="nav-repos"><i class="fa-solid fa-code-branch" style="width:16px"></i> Total Repositories</div>
-    <div class="nav-item" onclick="showView('ai-reports')" id="nav-ai-reports"><i class="fa-solid fa-shield-halved" style="width:16px"></i> AI Reports</div>
-    <div class="nav-item disabled"><i class="fa-solid fa-infinity" style="width:16px"></i> Pipelines <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
-    <div class="nav-item disabled"><i class="fa-solid fa-robot" style="width:16px"></i> AI Chat <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
-  </div>
-
-  <div style="margin-top:auto;padding:16px 8px;border-top:1px solid var(--border)">
-    <div style="font-size:10px;color:var(--muted);padding:4px 16px 8px;font-weight:600;letter-spacing:.05em">RECENT SCANS</div>
-    <div id="recent-scans" style="padding:0 8px;font-size:12px;color:var(--muted)">No scans yet</div>
-  </div>
-</div>
+</header>
 
 <!-- MAIN CONTENT -->
 <div class="main-content" id="main-content">
 
   <!-- OVERVIEW -->
   <div id="view-overview" class="fade-in">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+    <div class="page-head">
       <div>
-        <h1 style="font-size:28px;font-weight:700">Source Code Project</h1>
-        <p style="color:var(--muted);margin-top:4px;font-size:14px">GitHub → Code Review → SonarQube → Notify</p>
+        <h2 class="page-title"><i class="fa-solid fa-house" style="color:var(--accent)"></i> Agent Overview</h2>
+        <p class="page-sub">Repository health, scan activity and AI review quality at a glance</p>
       </div>
       <div style="display:flex;gap:8px">
+        <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:36px;font-size:12px;font-weight:600" onclick="showView('scans')"><i class="fa-solid fa-wave-square"></i> Scan History</button>
         <button class="btn-primary" onclick="showView('repos')"><i class="fa-solid fa-play" style="margin-right:6px"></i>Start Scan Flow</button>
       </div>
     </div>
@@ -192,57 +386,71 @@
     <!-- PIPELINE STEPS -->
     <div class="stat-card" style="margin-bottom:20px;padding:24px">
       <div style="font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.05em;margin-bottom:16px">SCAN PIPELINE</div>
-      <div style="display:flex;align-items:center;gap:0;overflow-x:auto">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="fa-brands fa-microsoft" style="font-size:16px"></i></div>
+      <div class="pipeline-track">
+        <div class="pipeline-node">
+          <div class="pipeline-icon" style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);color:var(--accent)"><i class="fa-brands fa-github"></i></div>
           <span style="font-size:11px;text-align:center;color:var(--text)">Select Repo</span>
         </div>
-        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin:0 4px;min-width:20px"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-code-branch" style="font-size:16px"></i></div>
+        <div class="pipeline-connector"><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i></div>
+        <div class="pipeline-node">
+          <div class="pipeline-icon" style="background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);color:var(--accent2)"><i class="fa-solid fa-code-branch"></i></div>
           <span style="font-size:11px;text-align:center;color:var(--text)">Pick Branch</span>
         </div>
-        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent2),var(--accent));margin:0 4px;min-width:20px"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="fa-solid fa-download" style="font-size:16px"></i></div>
+        <div class="pipeline-connector"><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i></div>
+        <div class="pipeline-node">
+          <div class="pipeline-icon" style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);color:var(--accent)"><i class="fa-solid fa-download"></i></div>
           <span style="font-size:11px;text-align:center;color:var(--text)">Git Fetch + Checkout</span>
         </div>
-        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin:0 4px;min-width:20px"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-magnifying-glass-chart" style="font-size:16px"></i></div>
+        <div class="pipeline-connector"><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i></div>
+        <div class="pipeline-node">
+          <div class="pipeline-icon" style="background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);color:var(--accent2)"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
           <span style="font-size:11px;text-align:center;color:var(--text)">SonarQube Scan</span>
         </div>
-        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent2),var(--accent));margin:0 4px;min-width:20px"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="fa-solid fa-robot" style="font-size:16px"></i></div>
+        <div class="pipeline-connector"><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i></div>
+        <div class="pipeline-node">
+          <div class="pipeline-icon" style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);color:var(--accent)"><i class="fa-solid fa-robot"></i></div>
           <span style="font-size:11px;text-align:center;color:var(--text)">Level 1 (AI Review)</span>
         </div>
-        <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin:0 4px;min-width:20px"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-envelope-circle-check" style="font-size:16px"></i></div>
+        <div class="pipeline-connector"><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i><i class="fa-solid fa-chevron-right flow-arrow"></i></div>
+        <div class="pipeline-node">
+          <div class="pipeline-icon" style="background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);color:var(--accent2)"><i class="fa-solid fa-envelope-circle-check"></i></div>
           <span style="font-size:11px;text-align:center;color:var(--text)">Notify</span>
         </div>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">REPOSITORIES</div>
-        <div style="font-size:32px;font-weight:700;font-family:'Space Mono',monospace" id="stat-repos">—</div>
+    <div class="grid-4">
+      <div class="tile" onclick="showView('repos')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-folder-tree"></i></div>
+        <div style="min-width:0">
+          <div class="tile-label">Repositories</div>
+          <div class="tile-value" id="stat-repos">—</div>
+          <div style="font-size:10.5px;color:var(--muted)" id="display-org">—</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AZURE ORG</div>
-        <div style="font-size:16px;font-weight:600;font-family:'Space Mono',monospace" id="display-org">—</div>
-        <div style="font-size:11px;color:var(--muted)" id="display-project">—</div>
+      <div class="tile" onclick="showView('scans')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-wave-square"></i></div>
+        <div style="min-width:0">
+          <div class="tile-label">Scans Run</div>
+          <div class="tile-value" id="stat-scan-runs">0</div>
+          <div style="font-size:10.5px;color:var(--muted)" id="stat-last-scan">Never</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">SONARQUBE</div>
-        <div style="font-size:13px;font-weight:600;color:var(--success)"><i class="fa-solid fa-circle-check"></i> Configured</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="display-sonar-url">—</div>
+      <div class="tile" onclick="showView('sonar-server')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-server"></i></div>
+        <div style="min-width:0">
+          <div class="tile-label">SonarQube</div>
+          <div class="tile-value" style="font-size:17px" id="ov-sonar-state">Checking…</div>
+          <div style="font-size:10.5px;color:var(--muted)" id="display-sonar-url">—</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">LAST SCAN</div>
-        <div style="font-size:13px;font-weight:600" id="stat-last-scan">Never</div>
+      <div class="tile" onclick="showView('quality-gate')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-gauge-high"></i></div>
+        <div style="min-width:0">
+          <div class="tile-label">Gate Pass Rate</div>
+          <div class="tile-value" id="ov-gate-rate">—</div>
+          <div style="font-size:10.5px;color:var(--muted)" id="ov-gate-detail">No reviews yet</div>
+        </div>
       </div>
     </div>
 
@@ -292,30 +500,43 @@
     </div>
 
     <!-- AI REVIEW QUALITY SNAPSHOT -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px">
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AI REVIEWS RUN</div>
-        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace" id="ov-stat-total-scans">—</div>
+    <div class="grid-3" style="margin-top:16px">
+      <div class="tile" onclick="showView('ai-reports')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-shield-halved"></i></div>
+        <div><div class="tile-label">AI Reviews Run</div><div class="tile-value" id="ov-stat-total-scans">—</div></div>
       </div>
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AVG QUALITY SCORE</div>
-        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:var(--accent)" id="ov-stat-avg-score">—</div>
+      <div class="tile" onclick="showView('ai-insights')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-star-half-stroke"></i></div>
+        <div><div class="tile-label">Avg Quality Score</div><div class="tile-value" style="color:var(--accent)" id="ov-stat-avg-score">—</div></div>
       </div>
-      <div class="stat-card">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">SECRETS EVER FLAGGED</div>
-        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace" id="ov-stat-secrets-total">—</div>
+      <div class="tile" onclick="showView('ai-insights')" style="cursor:pointer">
+        <div class="tile-icon"><i class="fa-solid fa-key"></i></div>
+        <div><div class="tile-label">Secrets Ever Flagged</div><div class="tile-value" id="ov-stat-secrets-total">—</div></div>
       </div>
     </div>
 
-    <!-- RECENT ACTIVITY -->
-    <div class="stat-card" style="padding:20px;margin-top:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:14px;font-weight:600;color:var(--text)">📊 Recent Activity</div>
-        <div style="font-size:11px;color:var(--muted)" id="activity-last-update">No scans yet</div>
+    <!-- RECENT ACTIVITY + LATEST RUNS -->
+    <div class="grid-2" style="margin-top:16px;align-items:start">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-title" style="margin:0"><i class="fa-solid fa-chart-line" style="color:var(--accent)"></i> Recent AI Reviews</div>
+          <div style="font-size:11px;color:var(--muted)" id="activity-last-update">No scans yet</div>
+        </div>
+        <div id="recent-activity-list" style="font-size:12px;color:var(--muted)">
+          <div style="padding:14px;background:var(--surface);border-radius:10px;text-align:center">
+            Run your first scan to see activity logs here
+          </div>
+        </div>
       </div>
-      <div id="recent-activity-list" style="font-size:12px;color:var(--muted)">
-        <div style="padding:10px;background:var(--surface);border-radius:8px;text-align:center">
-          Run your first scan to see activity logs here
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-title" style="margin:0"><i class="fa-solid fa-wave-square" style="color:var(--accent)"></i> Latest Scan Runs</div>
+          <div style="font-size:11px;color:var(--accent);cursor:pointer;font-weight:600" onclick="showView('scans')">View all →</div>
+        </div>
+        <div id="overview-runs" style="font-size:12px;color:var(--muted)">
+          <div style="padding:14px;background:var(--surface);border-radius:10px;text-align:center">
+            No scan runs recorded on this device yet
+          </div>
         </div>
       </div>
     </div>
@@ -323,10 +544,10 @@
 
   <!-- REPOS VIEW -->
   <div id="view-repos" class="fade-in hidden">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div class="page-head">
       <div>
-        <h2 style="font-size:22px;font-weight:700">Repositories</h2>
-        <p style="color:var(--muted);font-size:13px;margin-top:2px">Select a repository to view branches</p>
+        <h2 class="page-title"><i class="fa-solid fa-folder-tree" style="color:var(--accent)"></i> Repositories</h2>
+        <p class="page-sub">Select a repository to view its branches</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="text" id="repo-search" placeholder="🔍 Search repos..." oninput="filterRepos()" style="width:220px">
@@ -334,7 +555,7 @@
       </div>
     </div>
     <div id="repos-loading" style="text-align:center;padding:40px;color:var(--muted);display:none">
-      <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px"></i><br>Fetching from Azure DevOps...
+      <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px"></i><br>Fetching from GitHub...
     </div>
     <div id="repos-error" style="display:none;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:12px;padding:16px;margin-bottom:16px;font-size:13px;color:#f390ba"></div>
     <div id="repos-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px"></div>
@@ -363,8 +584,8 @@
     <div id="ai-reports-list-wrap">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:700">Level 1 (AI Review) — SonarQube Reports</h2>
-          <p style="color:var(--muted);font-size:13px;margin-top:2px">Past AI reviews, generated entirely from SonarQube findings — never raw source</p>
+          <h2 class="page-title"><i class="fa-solid fa-shield-halved" style="color:var(--accent)"></i> AI Reports</h2>
+          <p class="page-sub">Level 1 reviews, generated entirely from SonarQube findings — never raw source</p>
         </div>
         <button class="btn-primary" onclick="loadAiReports()" id="refresh-ai-reports-btn"><i class="fa-solid fa-arrows-rotate"></i></button>
       </div>
@@ -387,7 +608,484 @@
     </div>
   </div>
 
+  <!-- ══ SCAN HISTORY ══════════════════════════════════════════════════════ -->
+  <div id="view-scans" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-wave-square" style="color:var(--accent)"></i> Scan History</h2>
+        <p class="page-sub">Every SonarQube scan run — stages, timing, ratings and AI follow-up</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:36px;font-size:12px;font-weight:600" onclick="clearScanHistory()"><i class="fa-solid fa-trash"></i> Clear</button>
+        <button class="btn-primary" onclick="renderScanHistory()"><i class="fa-solid fa-arrows-rotate" style="margin-right:6px"></i>Refresh</button>
+      </div>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:18px">
+      <div class="tile">
+        <div class="tile-icon"><i class="fa-solid fa-chart-simple"></i></div>
+        <div><div class="tile-label">Total Runs</div><div class="tile-value" id="sh-total">0</div></div>
+      </div>
+      <div class="tile">
+        <div class="tile-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div><div class="tile-label">Active Now</div><div class="tile-value" id="sh-active">0</div></div>
+      </div>
+      <div class="tile">
+        <div class="tile-icon"><i class="fa-regular fa-clock"></i></div>
+        <div><div class="tile-label">Avg Duration</div><div class="tile-value" id="sh-avg">—</div></div>
+      </div>
+      <div class="tile">
+        <div class="tile-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div><div class="tile-label">Success Rate</div><div class="tile-value" id="sh-rate">—</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div style="position:relative;flex:1;min-width:240px">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px"></i>
+        <input type="text" id="sh-search" placeholder="Search by repository, branch or project key..." oninput="renderScanHistory()" style="width:100%;padding-left:36px;height:42px;border-radius:12px">
+      </div>
+      <select id="sh-status" onchange="renderScanHistory()" style="height:42px;border-radius:12px;border:1px solid var(--border);background:#fff;padding:0 14px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;cursor:pointer">
+        <option value="all">All statuses</option>
+        <option value="success">Completed</option>
+        <option value="failed">Failed</option>
+      </select>
+      <div style="font-size:12px;color:var(--muted);font-weight:500" id="sh-count">0 runs</div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>
+            <th style="width:14px"></th><th>Repository</th><th>Branch</th><th>Project Key</th><th>Status</th>
+            <th>Ratings</th><th>Issues</th><th>Lines</th><th>Duration</th><th>Stages</th><th>Started</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="sh-body"></tbody>
+        </table>
+      </div>
+      <div id="sh-empty" class="empty-state hidden">No scans recorded yet — launch a scan from a repository branch.</div>
+    </div>
+  </div>
+
+  <!-- ══ QUALITY GATE ══════════════════════════════════════════════════════ -->
+  <div id="view-quality-gate" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-gauge-high" style="color:var(--accent)"></i> Quality Gate</h2>
+        <p class="page-sub">Agent gate applied to every AI-reviewed branch</p>
+      </div>
+      <button class="btn-primary" onclick="loadAiReports()"><i class="fa-solid fa-arrows-rotate" style="margin-right:6px"></i>Refresh</button>
+    </div>
+    <div class="local-note">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>This is the <b>agent's own gate</b>, evaluated in the dashboard from each AI review: <b>PASS</b> requires quality score ≥ <span id="qg-threshold">70</span>, zero flagged secrets, and no critical issues. It is separate from any quality gate configured inside SonarQube itself.</div>
+    </div>
+    <div class="grid-4" style="margin-bottom:18px">
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-circle-check"></i></div><div><div class="tile-label">Passing</div><div class="tile-value" id="qg-pass">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-circle-xmark"></i></div><div><div class="tile-label">Failing</div><div class="tile-value" id="qg-fail">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-key"></i></div><div><div class="tile-label">Secret Blocks</div><div class="tile-value" id="qg-secrets">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-percent"></i></div><div><div class="tile-label">Pass Rate</div><div class="tile-value" id="qg-rate">—</div></div></div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Repository</th><th>Branch</th><th>Gate</th><th>Score</th><th>Issues</th><th>Secrets</th><th>Reviewed</th><th></th></tr></thead>
+          <tbody id="qg-body"></tbody>
+        </table>
+      </div>
+      <div id="qg-empty" class="empty-state hidden">No AI reviews yet — the gate has nothing to evaluate.</div>
+    </div>
+  </div>
+
+  <!-- ══ AI INSIGHTS ═══════════════════════════════════════════════════════ -->
+  <div id="view-ai-insights" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-brain" style="color:var(--accent)"></i> AI Insights</h2>
+        <p class="page-sub">Aggregated across every Level 1 (AI Review) report on this agent</p>
+      </div>
+      <button class="btn-primary" onclick="loadAiReports()"><i class="fa-solid fa-arrows-rotate" style="margin-right:6px"></i>Refresh</button>
+    </div>
+    <div class="grid-4" style="margin-bottom:18px">
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-file-shield"></i></div><div><div class="tile-label">Reviews</div><div class="tile-value" id="ins-reviews">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-star-half-stroke"></i></div><div><div class="tile-label">Avg Score</div><div class="tile-value" id="ins-avg">—</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-bug"></i></div><div><div class="tile-label">Issues Found</div><div class="tile-value" id="ins-issues">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-key"></i></div><div><div class="tile-label">Secrets Flagged</div><div class="tile-value" id="ins-secrets">0</div></div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-chart-column" style="color:var(--accent)"></i> Score Trend</div>
+        <div class="card-note" style="margin-bottom:12px">Quality score of the last 12 reviews, oldest to newest</div>
+        <div id="ins-trend" style="display:flex;align-items:flex-end;gap:8px;height:150px;padding-top:8px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-folder-tree" style="color:var(--accent)"></i> Issues by Repository</div>
+        <div class="card-note" style="margin-bottom:12px">Total issues attributed to each repository</div>
+        <div id="ins-repos"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--accent)"></i> Branches Needing Attention</div>
+      <div class="card-note" style="margin-bottom:12px">Lowest scoring reviews first — start here</div>
+      <div id="ins-attention"></div>
+    </div>
+  </div>
+
+  <!-- ══ SONARQUBE SERVER ══════════════════════════════════════════════════ -->
+  <div id="view-sonar-server" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-server" style="color:var(--accent)"></i> SonarQube Server</h2>
+        <p class="page-sub">The analysis engine this agent drives</p>
+      </div>
+      <a class="btn-primary" id="sq-open" href="#" target="_blank" style="text-decoration:none;display:inline-block"><i class="fa-solid fa-external-link" style="margin-right:6px"></i>Open SonarQube</a>
+    </div>
+    <div class="grid-3" style="margin-bottom:18px">
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-heart-pulse"></i></div><div><div class="tile-label">Agent Backend</div><div class="tile-value" style="font-size:18px" id="sq-agent-health">Checking…</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-key"></i></div><div><div class="tile-label">Sonar Token</div><div class="tile-value" style="font-size:18px" id="sq-token">—</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-cubes"></i></div><div><div class="tile-label">Projects Created</div><div class="tile-value" id="sq-projects">0</div></div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-network-wired" style="color:var(--accent)"></i> Connection</div>
+        <div style="margin-top:10px">
+          <div class="kv"><span class="kv-k">Server URL</span><span class="kv-v" id="sq-url">—</span></div>
+          <div class="kv"><span class="kv-k">GitHub account</span><span class="kv-v" id="sq-github">—</span></div>
+          <div class="kv"><span class="kv-k">Local repo path</span><span class="kv-v" id="sq-repopath">—</span></div>
+          <div class="kv"><span class="kv-k">Last health check</span><span class="kv-v" id="sq-checked">—</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-diagram-project" style="color:var(--accent)"></i> How a scan runs</div>
+        <div class="card-note" style="margin-bottom:12px">Each launch creates a uniquely keyed SonarQube project so history is never overwritten.</div>
+        <div style="font-size:12.5px;line-height:2">
+          <div><span style="color:var(--accent);font-weight:700">1.</span> Fetch + checkout the selected branch locally</div>
+          <div><span style="color:var(--accent);font-weight:700">2.</span> <span class="mono" style="font-size:11px">sonar-scanner begin</span> — register project key</div>
+          <div><span style="color:var(--accent);font-weight:700">3.</span> Build / analyse sources</div>
+          <div><span style="color:var(--accent);font-weight:700">4.</span> <span class="mono" style="font-size:11px">sonar-scanner end</span> — publish to server</div>
+          <div><span style="color:var(--accent);font-weight:700">5.</span> Pull metrics + issues back over the Web API</div>
+          <div><span style="color:var(--accent);font-weight:700">6.</span> Level 1 AI Review over those findings, then notify</div>
+        </div>
+        <div style="margin-top:14px;padding:10px 12px;background:rgba(232,34,118,.06);border-radius:10px;font-size:11.5px">
+          <div style="color:var(--muted);margin-bottom:3px">Project key format</div>
+          <div class="mono" style="font-size:11px" id="sq-keyformat">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ INTEGRATIONS ══════════════════════════════════════════════════════ -->
+  <div id="view-integrations" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-plug" style="color:var(--accent)"></i> Integrations</h2>
+        <p class="page-sub">Services this agent talks to — status read live from the backend</p>
+      </div>
+      <button class="btn-primary" onclick="loadServerConfig()"><i class="fa-solid fa-arrows-rotate" style="margin-right:6px"></i>Re-check</button>
+    </div>
+    <div class="local-note">
+      <i class="fa-solid fa-lock"></i>
+      <div>Credentials live only in the server's <span class="mono">.env</span>. The dashboard only ever receives a configured / not-configured flag — never a token value.</div>
+    </div>
+    <div class="grid-2" id="integrations-grid"></div>
+  </div>
+
+  <!-- ══ ADMIN · PII SETTINGS ══════════════════════════════════════════════ -->
+  <div id="view-pii" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-shield" style="color:var(--accent)"></i> PII Settings</h2>
+        <p class="page-sub">What leaves this machine, and what this dashboard shows</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-circle-check" style="color:#12783f"></i> Enforced by the agent</div>
+        <div class="card-note" style="margin-bottom:6px">Built into the scan pipeline — not toggleable from the UI.</div>
+        <div style="margin-top:8px">
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Source code never sent to the AI</div><div class="setting-desc">Level 1 review receives only SonarQube issue metadata — rule, file, line, message, severity, type — plus aggregate metrics.</div></div><span class="pill pill-ok">ON</span></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Secret values never captured</div><div class="setting-desc">When a hardcoded credential is flagged, only file, line and rule id are stored. The value itself is never read into the report.</div></div><span class="pill pill-ok">ON</span></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Repositories cloned locally only</div><div class="setting-desc">Checkout and analysis happen on this machine against the local SonarQube instance.</div></div><span class="pill pill-ok">ON</span></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Server bound to loopback</div><div class="setting-desc">The agent listens on 127.0.0.1 — it is not exposed to the network.</div></div><span class="pill pill-ok">ON</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-eye-slash" style="color:var(--accent)"></i> Display redaction</div>
+        <div class="card-note" style="margin-bottom:6px">Applies to what this browser renders. Stored locally on this device.</div>
+        <div style="margin-top:8px">
+          <div class="setting-row">
+            <div style="flex:1"><div class="setting-name">Mask file paths in reports</div><div class="setting-desc">Shows <span class="mono">…/Login.cs</span> instead of the full path in AI report issue locations — useful when screen-sharing.</div></div>
+            <button class="switch" id="sw-maskPaths" onclick="toggleSetting('maskPaths')"></button>
+          </div>
+          <div class="setting-row">
+            <div style="flex:1"><div class="setting-name">Hide project keys in tables</div><div class="setting-desc">Project keys embed the GitHub account name. Hide them in Scan History.</div></div>
+            <button class="switch" id="sw-hideKeys" onclick="toggleSetting('hideKeys')"></button>
+          </div>
+          <div class="setting-row">
+            <div style="flex:1"><div class="setting-name">Blur notification address</div><div class="setting-desc">Partially masks the report recipient email wherever it is shown.</div></div>
+            <button class="switch" id="sw-maskEmail" onclick="toggleSetting('maskEmail')"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADMIN · TOKEN USAGE ═══════════════════════════════════════════════ -->
+  <div id="view-tokens" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-coins" style="color:var(--accent)"></i> Token Usage</h2>
+        <p class="page-sub">Claude consumption by the Level 1 AI Review step</p>
+      </div>
+    </div>
+    <div class="local-note">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <div><b>Estimated, not metered.</b> The agent does not yet record the usage figures Claude returns per call. These numbers are derived from the number of reviews run and the configured per-review cap, so treat them as an upper-bound sizing guide — the Anthropic Console remains the source of truth for billing.</div>
+    </div>
+    <div class="grid-4" style="margin-bottom:18px">
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-robot"></i></div><div><div class="tile-label">Reviews Run</div><div class="tile-value" id="tok-reviews">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-arrow-right-to-bracket"></i></div><div><div class="tile-label">Est. Input Tokens</div><div class="tile-value" id="tok-in">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-arrow-right-from-bracket"></i></div><div><div class="tile-label">Est. Output Tokens</div><div class="tile-value" id="tok-out">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-microchip"></i></div><div><div class="tile-label">Model</div><div class="tile-value" style="font-size:14px" id="tok-model">—</div></div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-list-ul" style="color:var(--accent)"></i> Per Review</div>
+        <div style="margin-top:10px" id="tok-table"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-sliders" style="color:var(--accent)"></i> Call Configuration</div>
+        <div style="margin-top:10px">
+          <div class="kv"><span class="kv-k">Model</span><span class="kv-v" id="tok-model2">—</span></div>
+          <div class="kv"><span class="kv-k">Max output tokens per call</span><span class="kv-v">4,000</span></div>
+          <div class="kv"><span class="kv-k">Temperature</span><span class="kv-v">0.2</span></div>
+          <div class="kv"><span class="kv-k">Input payload</span><span class="kv-v">SonarQube findings JSON</span></div>
+          <div class="kv"><span class="kv-k">API key status</span><span class="kv-v" id="tok-key">—</span></div>
+        </div>
+        <div class="card-note" style="margin-top:12px">Input size scales with how many issues SonarQube reports for the branch, so noisy repositories cost more per review.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADMIN · NOTIFICATIONS ═════════════════════════════════════════════ -->
+  <div id="view-notifications" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-bell" style="color:var(--accent)"></i> Notifications</h2>
+        <p class="page-sub">Where scan and review outcomes are delivered</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-envelope" style="color:var(--accent)"></i> Email Delivery <span class="pill pill-idle" style="margin-left:auto">server</span></div>
+        <div class="card-note" style="margin-bottom:6px">Configured in the server's <span class="mono">.env</span>; shown here read-only.</div>
+        <div style="margin-top:8px">
+          <div class="kv"><span class="kv-k">SMTP host</span><span class="kv-v" id="nt-smtp">—</span></div>
+          <div class="kv"><span class="kv-k">Recipient</span><span class="kv-v" id="nt-email">—</span></div>
+          <div class="kv"><span class="kv-k">Status</span><span class="kv-v" id="nt-status">—</span></div>
+        </div>
+        <div class="card-note" style="margin-top:12px">Two mails are sent per flow: a scan-failure alert if the scanner errors, and a consolidated AI Review report once Level 1 completes.</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-desktop" style="color:var(--accent)"></i> In-Dashboard Alerts <span class="pill pill-idle" style="margin-left:auto">this device</span></div>
+        <div class="card-note" style="margin-bottom:6px">Local preferences, stored in this browser.</div>
+        <div style="margin-top:8px">
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Toast on scan complete</div><div class="setting-desc">Pop a corner notification when a SonarQube scan finishes.</div></div><button class="switch" id="sw-toastScan" onclick="toggleSetting('toastScan')"></button></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Toast on AI review complete</div><div class="setting-desc">Pop a notification when Level 1 review returns a score.</div></div><button class="switch" id="sw-toastReview" onclick="toggleSetting('toastReview')"></button></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Alert loudly on secrets</div><div class="setting-desc">Use the critical (pink) toast style whenever credentials are flagged.</div></div><button class="switch" id="sw-toastSecrets" onclick="toggleSetting('toastSecrets')"></button></div>
+        </div>
+        <button class="btn-primary" style="margin-top:14px;width:100%" onclick="toast('Test notification','This is how dashboard alerts will appear.','ok')"><i class="fa-solid fa-paper-plane" style="margin-right:6px"></i>Send test toast</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADMIN · USER MANAGEMENT ═══════════════════════════════════════════ -->
+  <div id="view-users" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-users" style="color:var(--accent)"></i> User Management</h2>
+        <p class="page-sub">Who is operating this agent</p>
+      </div>
+    </div>
+    <div class="grid-4" style="margin-bottom:18px" id="um-tiles">
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-users"></i></div><div><div class="tile-label">Total Users</div><div class="tile-value" id="um-total">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-user-shield"></i></div><div><div class="tile-label">Admins</div><div class="tile-value" id="um-admins">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-user-check"></i></div><div><div class="tile-label">Active</div><div class="tile-value" id="um-active">0</div></div></div>
+      <div class="tile"><div class="tile-icon"><i class="fa-solid fa-user-slash"></i></div><div><div class="tile-label">Disabled</div><div class="tile-value" id="um-disabled">0</div></div></div>
+    </div>
+
+    <div id="um-denied" class="local-note hidden">
+      <i class="fa-solid fa-lock"></i>
+      <div>Your role does not include <span class="mono">users.view</span>, so the account list is hidden. Only administrators can manage users.</div>
+    </div>
+
+    <div class="grid-2" style="align-items:start;margin-bottom:16px">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-id-badge" style="color:var(--accent)"></i> Signed in as</div>
+        <div style="display:flex;align-items:center;gap:14px;margin:16px 0">
+          <div class="avatar" style="width:52px;height:52px;font-size:16px" id="up-initials">—</div>
+          <div style="min-width:0">
+            <div style="font-weight:700;font-size:15px" id="up-name">—</div>
+            <div style="font-size:12px;color:var(--muted)"><span id="up-username" class="mono">—</span> · <span id="up-role">—</span></div>
+          </div>
+          <button class="icon-btn" style="margin-left:auto;width:auto;padding:0 12px;gap:7px;height:34px;font-size:12px;font-weight:600" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button>
+        </div>
+        <div style="margin-top:6px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">CHANGE YOUR PASSWORD</div>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="own-current" placeholder="Current password" style="flex:1">
+            <input type="password" id="own-pwd" placeholder="New (min 8 chars)" style="flex:1">
+            <button class="btn-primary" onclick="changeOwnPassword()">Update</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-key" style="color:var(--accent)"></i> Your Permissions</div>
+        <div class="card-note" style="margin-bottom:10px">Granted by your role — <span id="perm-role-name" style="font-weight:700;color:var(--text)">—</span>. Enforced on the server, not just hidden in the UI.</div>
+        <div id="perm-list" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 18px"></div>
+      </div>
+    </div>
+
+    <div id="um-manage" class="hidden">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title"><i class="fa-solid fa-user-plus" style="color:var(--accent)"></i> Create User</div>
+        <div class="card-note" style="margin-bottom:14px">Accounts are local to this agent and stored hashed in <span class="mono">data/users.json</span>.</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">USERNAME</div>
+            <input type="text" id="nu-username" placeholder="jdoe" style="width:100%">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">FULL NAME</div>
+            <input type="text" id="nu-name" placeholder="Jane Doe" style="width:100%">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">EMAIL</div>
+            <input type="text" id="nu-email" placeholder="jane@company.com" style="width:100%">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">ROLE</div>
+            <select id="nu-role" style="width:100%;height:37px;border-radius:10px;border:1px solid var(--border);background:#fff;padding:0 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;cursor:pointer"></select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">PASSWORD</div>
+            <input type="text" id="nu-password" placeholder="min 8 characters" style="width:100%">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+          <button class="btn-primary" onclick="createUser()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Create user</button>
+          <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:36px;font-size:12px;font-weight:600" onclick="suggestPassword()"><i class="fa-solid fa-dice"></i> Generate password</button>
+          <div id="nu-msg" style="font-size:12px"></div>
+        </div>
+      </div>
+
+      <div class="page-head" style="margin-bottom:12px">
+        <div><h3 style="font-size:15px;font-weight:700">All Accounts</h3></div>
+        <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:34px;font-size:12px;font-weight:600" onclick="loadUsers()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th style="width:14px"></th><th>User</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Last login</th><th>Actions</th></tr></thead>
+            <tbody id="um-body"></tbody>
+          </table>
+        </div>
+        <div id="um-empty" class="empty-state hidden">No accounts found.</div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-title"><i class="fa-solid fa-table-list" style="color:var(--accent)"></i> Role Matrix</div>
+        <div class="card-note" style="margin-bottom:12px">Admin holds every permission — user creation, deletion, project edits and all agent operations.</div>
+        <div class="table-scroll">
+          <table class="data-table" id="role-matrix"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADMIN · AUDIT TRAIL ═══════════════════════════════════════════════ -->
+  <div id="view-audit" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-clipboard-list" style="color:var(--accent)"></i> Audit Trail</h2>
+        <p class="page-sub">Actions taken from this dashboard session</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:36px;font-size:12px;font-weight:600" onclick="exportAudit()"><i class="fa-solid fa-download"></i> Export</button>
+        <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:36px;font-size:12px;font-weight:600" onclick="clearAudit()"><i class="fa-solid fa-trash"></i> Clear</button>
+      </div>
+    </div>
+    <div class="local-note">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>Client-side trail, capped at 300 entries and stored in this browser. It records what was triggered from this UI — it is not a tamper-proof server audit log.</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div style="position:relative;flex:1;min-width:240px">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px"></i>
+        <input type="text" id="audit-search" placeholder="Search actions..." oninput="renderAudit()" style="width:100%;padding-left:36px;height:42px;border-radius:12px">
+      </div>
+      <div style="font-size:12px;color:var(--muted);font-weight:500" id="audit-count">0 entries</div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th style="width:14px"></th><th>Time</th><th>Action</th><th>Target</th><th>Result</th></tr></thead>
+          <tbody id="audit-body"></tbody>
+        </table>
+      </div>
+      <div id="audit-empty" class="empty-state hidden">Nothing recorded yet.</div>
+    </div>
+  </div>
+
+  <!-- ══ ADMIN · SETTINGS ══════════════════════════════════════════════════ -->
+  <div id="view-settings" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-gear" style="color:var(--accent)"></i> Settings</h2>
+        <p class="page-sub">Dashboard behaviour and backend configuration</p>
+      </div>
+      <button class="icon-btn" style="width:auto;padding:0 14px;gap:7px;height:36px;font-size:12px;font-weight:600" onclick="resetSettings()"><i class="fa-solid fa-rotate-left"></i> Reset defaults</button>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-display" style="color:var(--accent)"></i> Dashboard <span class="pill pill-idle" style="margin-left:auto">this device</span></div>
+        <div style="margin-top:8px">
+          <div class="setting-row">
+            <div style="flex:1"><div class="setting-name">Landing view</div><div class="setting-desc">Which page opens when the dashboard loads.</div></div>
+            <select id="set-landing" onchange="setSetting('landing', this.value)" style="height:36px;border-radius:9px;border:1px solid var(--border);background:#fff;padding:0 10px;font-family:'DM Sans',sans-serif;font-size:12.5px;outline:none;cursor:pointer">
+              <option value="overview">Overview</option>
+              <option value="repos">Repositories</option>
+              <option value="scans">Scan History</option>
+              <option value="ai-reports">AI Reports</option>
+            </select>
+          </div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Auto-load repositories on connect</div><div class="setting-desc">Fetch the GitHub repository list as soon as the socket connects.</div></div><button class="switch" id="sw-autoLoad" onclick="toggleSetting('autoLoad')"></button></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Keep sidebar collapsed</div><div class="setting-desc">Start in the icon-only rail layout.</div></div><button class="switch" id="sw-railMode" onclick="toggleSetting('railMode')"></button></div>
+          <div class="setting-row"><div style="flex:1"><div class="setting-name">Record scan history</div><div class="setting-desc">Keep a local record of every scan run for the Scan History page.</div></div><button class="switch" id="sw-keepHistory" onclick="toggleSetting('keepHistory')"></button></div>
+          <div class="setting-row">
+            <div style="flex:1"><div class="setting-name">Quality gate threshold</div><div class="setting-desc">Minimum AI quality score required to pass the agent gate.</div></div>
+            <input type="text" id="set-threshold" style="width:70px;text-align:center" onchange="setSetting('threshold', this.value)">
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-server" style="color:var(--accent)"></i> Backend <span class="pill pill-idle" style="margin-left:auto">read-only</span></div>
+        <div class="card-note" style="margin-bottom:6px">Sourced from the server's environment. Edit <span class="mono">.env</span> and restart to change these.</div>
+        <div style="margin-top:8px">
+          <div class="kv"><span class="kv-k">SonarQube URL</span><span class="kv-v" id="st-sonar">—</span></div>
+          <div class="kv"><span class="kv-k">GitHub account</span><span class="kv-v" id="st-github">—</span></div>
+          <div class="kv"><span class="kv-k">Repository path</span><span class="kv-v" id="st-repopath">—</span></div>
+          <div class="kv"><span class="kv-k">AI model</span><span class="kv-v" id="st-model">—</span></div>
+          <div class="kv"><span class="kv-k">Notify email</span><span class="kv-v" id="st-email">—</span></div>
+          <div class="kv"><span class="kv-k">Agent build</span><span class="kv-v">SonarAI v3.0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main-content -->
+</div><!-- /app-main -->
 
 <!-- RIGHT PANEL -->
 <div class="right-panel hidden" id="right-panel">
@@ -474,7 +1172,10 @@
   </div><!-- /panel scroll -->
 </div><!-- /right-panel -->
 
-</div><!-- /flex -->
+</div><!-- /app-shell -->
+
+<!-- TOAST HOST -->
+<div id="toast-host" style="position:fixed;right:20px;bottom:20px;z-index:9998;display:flex;flex-direction:column;gap:10px;align-items:flex-end"></div>
 
 <script>
 const socket = io();
@@ -483,59 +1184,163 @@ let currentBranch = '';
 let currentProjectKey = '';
 let allRepos = [];
 let allBranches = [];
-let scanStepState = [0, 0, 0];
+let scanStepState = ['pending', 'pending', 'pending'];
+let scanStartedAt = 0;   // ms timestamp of the in-flight scan
+let activeScans   = 0;   // 0 or 1 — this dashboard runs one scan at a time
+
+const $ = id => document.getElementById(id);
 
 // ── LOAD CONFIG FROM SERVER (no hardcoded URLs in frontend) ──────────────────
 window._appConfig = {};
-fetch('/api/config')
-  .then(r => r.json())
-  .then(cfg => {
-    window._appConfig = cfg;
-    const sonarHost = cfg.sonarUrl ? new URL(cfg.sonarUrl).hostname : '—';
-    const el = document.getElementById('display-org');
-    if (el) el.textContent = cfg.org || '—';
-    const ep = document.getElementById('display-project');
-    if (ep) ep.textContent = cfg.project || '—';
-    const es = document.getElementById('display-sonar-url');
-    if (es) es.textContent = sonarHost;
-    const ss = document.getElementById('scan-server-display');
-    if (ss) ss.textContent = sonarHost;
-  })
-  .catch(() => {}); // silently fail — UI shows '—'
+function loadServerConfig() {
+  return fetch('/api/config')
+    .then(r => r.json())
+    .then(cfg => {
+      window._appConfig = cfg;
+      applyServerConfig(cfg);
+      return cfg;
+    })
+    .catch(() => {}); // silently fail — UI shows '—'
+}
+
+// Fans the server config out to every page that displays a piece of it.
+function applyServerConfig(cfg) {
+  const sonarHost = cfg.sonarUrl ? new URL(cfg.sonarUrl).hostname + ':' + (new URL(cfg.sonarUrl).port || '80') : '—';
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+
+  set('display-org', cfg.githubUsername ? '@' + cfg.githubUsername : '—');
+  set('display-sonar-url', sonarHost);
+  set('scan-server-display', sonarHost);
+  set('ov-sonar-state', cfg.sonarConfigured ? 'Connected' : 'No token');
+
+  // Platform → SonarQube Server
+  set('sq-url', cfg.sonarUrl || '—');
+  set('sq-github', cfg.githubUsername || '—');
+  set('sq-repopath', cfg.repoBasePath || '—');
+  set('sq-token', cfg.sonarConfigured ? 'Configured' : 'Missing');
+  set('sq-keyformat', `${cfg.githubUsername || '<user>'}-<repo>-<branch>-<yyyymmddhhmmss>`);
+  const openBtn = $('sq-open'); if (openBtn && cfg.sonarUrl) openBtn.href = cfg.sonarUrl;
+
+  // Admin → Token Usage
+  set('tok-model',  cfg.aiModel || '—');
+  set('tok-model2', cfg.aiModel || '—');
+  set('tok-key',    cfg.aiConfigured ? 'Configured' : 'Not set');
+
+  // Admin → Notifications
+  set('nt-smtp',   cfg.smtpHost || 'Not configured');
+  set('nt-email',  cfg.notifyEmail ? maybeMaskEmail(cfg.notifyEmail) : 'Not configured');
+  set('nt-status', cfg.smtpConfigured && cfg.notifyEmail ? 'Active' : 'Inactive — mails are skipped');
+
+  // Admin → Settings (backend column)
+  set('st-sonar',    cfg.sonarUrl || '—');
+  set('st-github',   cfg.githubUsername || '—');
+  set('st-repopath', cfg.repoBasePath || '—');
+  set('st-model',    cfg.aiModel || '—');
+  set('st-email',    cfg.notifyEmail ? maybeMaskEmail(cfg.notifyEmail) : '—');
+
+  renderIntegrations();
+}
 
 // Clock
 setInterval(() => {
-  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN');
+  $('clock').textContent = new Date().toLocaleTimeString('en-IN');
 }, 1000);
 
 // Socket connection
 socket.on('connect', () => {
-  document.getElementById('conn-dot').style.background = '#22c55e';
-  document.getElementById('conn-text').textContent = 'Connected';
-  document.getElementById('conn-text').style.color = '#22c55e';
-  loadRepos();
+  const pill = $('conn-status');
+  pill.className = 'pill pill-ok';
+  pill.style.padding = '6px 12px';
+  $('conn-dot').style.background = '#12783f';
+  $('conn-text').textContent = 'System OK';
+  if (settings.autoLoad) loadRepos();
   loadAiReports();
 });
 socket.on('disconnect', () => {
-  document.getElementById('conn-dot').style.background = 'var(--danger)';
-  document.getElementById('conn-text').textContent = 'Disconnected';
-  document.getElementById('conn-text').style.color = 'var(--muted)';
+  const pill = $('conn-status');
+  pill.className = 'pill pill-fail';
+  pill.style.padding = '6px 12px';
+  $('conn-dot').style.background = 'var(--danger)';
+  $('conn-text').textContent = 'Disconnected';
+});
+
+// The socket carries the same session cookie — a rejected handshake means the
+// session is gone, so send the user back to the login page rather than
+// leaving a dashboard that silently does nothing.
+socket.on('connect_error', err => {
+  if (String(err && err.message) === 'unauthorized') window.location.href = '/login';
 });
 
 // ── VIEW MANAGEMENT ─────────────────────────────────────────────────────────
+// Every routable page: id suffix → topbar heading + which nav group owns it.
+const VIEW_META = {
+  'overview':     { title: 'Overview',          sub: 'GitHub → SonarQube Scan → Level 1 AI Review → Notify', group: 'workspace' },
+  'repos':        { title: 'Repositories',      sub: 'Every repository this agent can scan',                 group: 'workspace' },
+  'branches':     { title: 'Branches',          sub: 'Pick a branch to launch the scan flow',                group: 'workspace' },
+  'scans':        { title: 'Scan History',      sub: 'All SonarQube scan runs — stages, timing and results', group: 'operations' },
+  'quality-gate': { title: 'Quality Gate',      sub: 'Pass / fail status of every reviewed branch',          group: 'operations' },
+  'ai-reports':   { title: 'AI Reports',        sub: 'Level 1 reviews built from SonarQube findings',        group: 'ai' },
+  'ai-insights':  { title: 'AI Insights',       sub: 'Trends and hotspots across all reviews',               group: 'ai' },
+  'sonar-server': { title: 'SonarQube Server',  sub: 'The analysis engine this agent drives',                group: 'platform' },
+  'integrations': { title: 'Integrations',      sub: 'GitHub, SonarQube, Claude and SMTP status',            group: 'platform' },
+  'pii':          { title: 'PII Settings',      sub: 'What leaves this machine, and what is shown',          group: 'admin' },
+  'tokens':       { title: 'Token Usage',       sub: 'Claude consumption by the AI Review step',             group: 'admin' },
+  'notifications':{ title: 'Notifications',     sub: 'Where scan and review outcomes are delivered',         group: 'admin' },
+  'users':        { title: 'User Management',   sub: 'Who is operating this agent',                          group: 'admin' },
+  'audit':        { title: 'Audit Trail',       sub: 'Actions taken from this dashboard',                    group: 'admin' },
+  'settings':     { title: 'Settings',          sub: 'Dashboard behaviour and backend configuration',        group: 'admin' }
+};
+
 function showView(name) {
-  ['overview','repos','branches','ai-reports'].forEach(v => {
-    document.getElementById('view-' + v).classList.add('hidden');
-    document.getElementById('nav-' + v)?.classList.remove('active');
+  if (!VIEW_META[name]) return;
+  Object.keys(VIEW_META).forEach(v => {
+    $('view-' + v)?.classList.add('hidden');
+    $('nav-' + v)?.classList.remove('active');
   });
-  document.getElementById('view-' + name).classList.remove('hidden');
-  document.getElementById('nav-' + name)?.classList.add('active');
+  $('view-' + name).classList.remove('hidden');
+  $('nav-' + name)?.classList.add('active');
+
+  const meta = VIEW_META[name];
+  $('page-title').textContent = meta.title;
+  $('page-sub').textContent   = meta.sub;
+  // Never leave the active item hidden inside a folded group
+  $('group-' + meta.group)?.classList.remove('collapsed');
+  $('main-content').scrollTop = 0;
+
   if (name === 'repos' && allRepos.length === 0) loadRepos();
+  if (name === 'branches' && !allBranches.length && !currentRepo) {
+    $('branch-count-text').textContent = 'Pick a repository first';
+    $('branches-grid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">No repository selected — open <b>Repositories</b> and choose one.</div>';
+  }
   if (name === 'ai-reports') {
-    document.getElementById('ai-report-detail-wrap').classList.add('hidden');
-    document.getElementById('ai-reports-list-wrap').classList.remove('hidden');
+    $('ai-report-detail-wrap').classList.add('hidden');
+    $('ai-reports-list-wrap').classList.remove('hidden');
     loadAiReports();
   }
+  if (name === 'scans')        renderScanHistory();
+  if (name === 'quality-gate') renderQualityGate();
+  if (name === 'ai-insights')  renderInsights();
+  if (name === 'tokens')       renderTokenUsage();
+  if (name === 'audit')        renderAudit();
+  if (name === 'sonar-server') checkAgentHealth();
+  if (name === 'users')        loadUsers();
+}
+
+function toggleNavGroup(group) {
+  $('group-' + group).classList.toggle('collapsed');
+}
+
+function toggleSidebar() {
+  const collapsed = $('sidebar').classList.toggle('collapsed');
+  setSetting('railMode', collapsed);
+}
+
+function refreshAll() {
+  loadServerConfig();
+  loadRepos();
+  loadAiReports();
+  checkAgentHealth();
+  toast('Refreshed', 'Repositories, reports and server status reloaded.', 'ok');
 }
 
 function switchTab(tab) {
@@ -593,12 +1398,13 @@ socket.on('repositories', ({ success, repos, error }) => {
   const errEl = document.getElementById('repos-error');
   if (!success && error) {
     errEl.style.display = 'block';
-    errEl.innerHTML = `⚠️ <b>Azure API unreachable</b> — showing fallback repos.<br><small style="opacity:.7">${escHtml(error)}</small>`;
+    errEl.innerHTML = `⚠️ <b>GitHub API unreachable</b> — showing fallback repos.<br><small style="opacity:.7">${escHtml(error)}</small>`;
   } else {
     errEl.style.display = 'none';
   }
   allRepos = repos || [];
-  document.getElementById('stat-repos').textContent = allRepos.length;
+  $('stat-repos').textContent = allRepos.length;
+  $('nav-badge-repos').textContent = allRepos.length;
   renderRepos(allRepos);
 });
 
@@ -644,7 +1450,7 @@ socket.on('branches', ({ success, branches, error }) => {
   allBranches = branches || [];
   const count = allBranches.length;
   document.getElementById('branch-count-text').textContent =
-    success ? `${count} branches found` : `${count} branches (fallback — Azure unreachable: ${error})`;
+    success ? `${count} branches found` : `${count} branches (fallback — GitHub unreachable: ${error})`;
   renderBranches(allBranches);
 });
 
@@ -792,7 +1598,7 @@ function buildReviewHTML(review) {
                 <span style="font-size:11px;font-weight:700;color:#1a1a1a">🔑 ${escHtml(secret.type || 'Credential')}</span>
                 ${secret.rule ? `<span style="font-size:9px;color:#6b6b6b;font-family:'Space Mono',monospace">${escHtml(secret.rule)}</span>` : ''}
               </div>
-              <div style="font-size:10px;color:#6b6b6b;margin-bottom:4px">📍 ${escHtml(secret.file || 'Unknown')}${secret.line ? ':' + secret.line : ''} <span style="opacity:.7">(value masked — never captured)</span></div>
+              <div style="font-size:10px;color:#6b6b6b;margin-bottom:4px">📍 ${escHtml(maskPath(secret.file) || 'Unknown')}${secret.line ? ':' + secret.line : ''} <span style="opacity:.7">(value masked — never captured)</span></div>
               <div style="font-size:10px;color:#333333;margin-bottom:6px">${escHtml(secret.description || 'Hardcoded credential detected')}</div>
               <div style="background:rgba(0,0,0,.1);border:1px solid rgba(0,0,0,.3);border-radius:6px;padding:8px;margin-top:6px">
                 <div style="font-size:9px;font-weight:700;color:#1a1a1a;margin-bottom:3px">💡 Recommended Fix:</div>
@@ -840,7 +1646,7 @@ function buildReviewHTML(review) {
                     </div>
                     <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">${i+1}. ${escHtml(issue.title || 'Issue')}</div>
                     <div style="font-size:11px;color:var(--text);line-height:1.5;margin-bottom:8px">
-                      <strong>📍 Location:</strong> ${escHtml(issue.file || 'Unknown')}${issue.line ? `:${issue.line}` : ''}
+                      <strong>📍 Location:</strong> ${escHtml(maskPath(issue.file) || 'Unknown')}${issue.line ? `:${issue.line}` : ''}
                     </div>
                     <div style="font-size:11px;color:var(--text);line-height:1.6;margin-bottom:8px">
                       <strong>⚠️ Issue:</strong> ${escHtml(issue.description || 'No description')}
@@ -1137,6 +1943,11 @@ socket.on('ai-reports', ({ success, reports }) => {
   document.getElementById('ai-reports-loading').style.display = 'none';
   allAiReports = reports || [];
   renderOverviewFromReports(allAiReports);
+  // Reports are the data source for the gate, insights and token pages too
+  $('nav-badge-reports').textContent = allAiReports.length;
+  renderQualityGate();
+  renderInsights();
+  renderTokenUsage();
   const grid = document.getElementById('ai-reports-grid');
   if (!allAiReports.length) {
     document.getElementById('ai-reports-empty').style.display = 'block';
@@ -1187,7 +1998,7 @@ socket.on('ai-report-detail', ({ success, repoName, branch, review, error }) => 
 
 // ── SONAR SCAN ───────────────────────────────────────────────────────────────
 function resetScanSteps() {
-  scanStepState = [0, 0, 0];
+  scanStepState = ['pending', 'pending', 'pending'];
   ['step-begin','step-build','step-end'].forEach((id,i) => {
     const el = document.getElementById(id);
     el.className = 'step step-pending';
@@ -1198,6 +2009,7 @@ function resetScanSteps() {
 function setScanStep(index, state) {
   const ids = ['step-begin','step-build','step-end'];
   const el = document.getElementById(ids[index]);
+  scanStepState[index] = state;
   el.className = 'step step-' + state;
   if (state === 'done') el.querySelector('.step-dot').innerHTML = '<i class="fa-solid fa-check" style="font-size:8px"></i>';
   if (state === 'error') el.querySelector('.step-dot').innerHTML = '<i class="fa-solid fa-x" style="font-size:8px"></i>';
@@ -1211,6 +2023,11 @@ function doSonarScan() {
   document.getElementById('scan-result-section').style.display = 'none';
   resetScanSteps();
   setScanStep(0, 'active');
+  // Timing + live-run state feed the Scan History page
+  scanStartedAt = Date.now();
+  activeScans   = 1;
+  logAudit('SonarQube scan started', `${currentRepo} · ${currentBranch}`, 'running');
+  renderScanHistory();
   socket.emit('sonar-scan', { branch: currentBranch, repoName: currentRepo });
 }
 
@@ -1243,14 +2060,10 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
   const el = document.getElementById('scan-result-section');
   el.style.display = 'block';
 
-  // Update recent scans sidebar
-  const rs = document.getElementById('recent-scans');
-  const now = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
-  rs.innerHTML = `<div style="padding:6px 8px;border-radius:6px;background:${success?'rgba(0,0,0,.05)':'rgba(232,34,118,.05)'};border:1px solid ${success?'rgba(0,0,0,.2)':'rgba(232,34,118,.2)'};margin-bottom:4px">
-    <div style="color:${success?'var(--success)':'var(--danger)'};font-size:11px;font-weight:600">${success?'✅':'❌'} ${branch?.substring(0,20)}...</div>
-    <div style="color:var(--muted);font-size:10px">${now}</div>
-  </div>`;
-  document.getElementById('stat-last-scan').textContent = now;
+  // Record the run for Scan History / Overview and stamp the "last scan" label
+  const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  recordScanRun({ success, branch, repoName, projectKey, report, error });
+  $('stat-last-scan').textContent = 'Last: ' + now;
 
   if (!success) {
     el.innerHTML = `<div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:10px;padding:12px;font-size:12px;color:#f390ba">
@@ -1358,15 +2171,15 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
         <div style="text-align:center">
-          <div class="rating rating-${m.reliability_rating||'A'}" style="margin:0 auto 2px">${m.reliability_rating||'A'}</div>
+          <div class="rating rating-${ratingLetter(m.reliability_rating)}" style="margin:0 auto 2px">${ratingLetter(m.reliability_rating)}</div>
           <div style="font-size:10px;color:var(--muted)">Reliability</div>
         </div>
         <div style="text-align:center">
-          <div class="rating rating-${m.security_rating||'A'}" style="margin:0 auto 2px">${m.security_rating||'A'}</div>
+          <div class="rating rating-${ratingLetter(m.security_rating)}" style="margin:0 auto 2px">${ratingLetter(m.security_rating)}</div>
           <div style="font-size:10px;color:var(--muted)">Security</div>
         </div>
         <div style="text-align:center">
-          <div class="rating rating-${m.sqale_rating||'A'}" style="margin:0 auto 2px">${m.sqale_rating||'A'}</div>
+          <div class="rating rating-${ratingLetter(m.sqale_rating)}" style="margin:0 auto 2px">${ratingLetter(m.sqale_rating)}</div>
           <div style="font-size:10px;color:var(--muted)">Maintain.</div>
         </div>
       </div>
@@ -1377,6 +2190,751 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
       <button class="btn-primary btn-purple" onclick="switchTab('review')" style="margin-top:8px;width:100%;font-size:12px"><i class="fa-solid fa-robot"></i> Next: AI Review →</button>
     </div>`;
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPERATIONS · PLATFORM · ADMIN
+   Everything below drives the pages outside the core scan flow. Anything that
+   is a browser-local preference (rather than server state) is stored under the
+   `sonarai.*` localStorage keys and labelled as such in the UI.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const LS = { settings:'sonarai.settings', history:'sonarai.scanHistory', audit:'sonarai.audit' };
+
+const DEFAULT_SETTINGS = {
+  landing: 'overview', autoLoad: true, railMode: false, keepHistory: true, threshold: 70,
+  maskPaths: false, hideKeys: false, maskEmail: false,
+  toastScan: true, toastReview: true, toastSecrets: true
+};
+
+function readLS(key, fallback) {
+  try { const v = JSON.parse(localStorage.getItem(key)); return v === null || v === undefined ? fallback : v; }
+  catch { return fallback; }
+}
+function writeLS(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode / quota — preferences just won't persist */ }
+}
+
+let settings = { ...DEFAULT_SETTINGS, ...readLS(LS.settings, {}) };
+
+function setSetting(key, value) {
+  if (key === 'threshold') {
+    const n = parseInt(value, 10);
+    value = isNaN(n) ? DEFAULT_SETTINGS.threshold : Math.min(100, Math.max(0, n));
+  }
+  settings[key] = value;
+  writeLS(LS.settings, settings);
+  applySettings();
+  logAudit('Setting changed', `${key} → ${value}`, 'ok');
+}
+function toggleSetting(key) { setSetting(key, !settings[key]); }
+
+function resetSettings() {
+  settings = { ...DEFAULT_SETTINGS };
+  writeLS(LS.settings, settings);
+  applySettings();
+  logAudit('Settings reset', 'All dashboard preferences restored to defaults', 'ok');
+  toast('Settings reset', 'Dashboard preferences are back to their defaults.', 'ok');
+}
+
+// Reflects the current preference values into every control that shows them.
+function applySettings() {
+  ['maskPaths','hideKeys','maskEmail','toastScan','toastReview','toastSecrets','autoLoad','railMode','keepHistory']
+    .forEach(k => $('sw-' + k)?.classList.toggle('on', !!settings[k]));
+  const land = $('set-landing');  if (land) land.value = settings.landing;
+  const thr  = $('set-threshold'); if (thr) thr.value = settings.threshold;
+  const qgt  = $('qg-threshold'); if (qgt) qgt.textContent = settings.threshold;
+  $('sidebar').classList.toggle('collapsed', !!settings.railMode);
+  if (window._appConfig && window._appConfig.notifyEmail) applyServerConfig(window._appConfig);
+  renderScanHistory();
+  renderQualityGate();
+}
+
+/* ── IDENTITY, ROLES & USER MANAGEMENT ──────────────────────────────────────
+   The signed-in account comes from the server session; the UI only mirrors it.
+   Hiding a control here is a convenience — every action is re-checked server
+   side, so a hidden button is not the security boundary. */
+let auth = { user: null, roles: ['admin', 'reviewer', 'viewer'], allPermissions: [] };
+let allUsers = [];
+
+const ROLE_LABEL = { admin: 'Administrator', reviewer: 'Reviewer', viewer: 'Viewer' };
+const PERM_LABEL = {
+  'users.view': 'View user accounts', 'users.create': 'Create users', 'users.edit': 'Edit users & reset passwords',
+  'users.delete': 'Delete users', 'projects.edit': 'Edit project configuration', 'scan.run': 'Run SonarQube scans',
+  'review.run': 'Run Level 1 AI reviews', 'repos.view': 'Browse repositories & branches',
+  'reports.view': 'View AI reports', 'reports.delete': 'Delete AI reports',
+  'settings.edit': 'Change agent settings', 'audit.view': 'View the audit trail'
+};
+
+function can(perm) { return !!auth.user && (auth.user.permissions || []).includes(perm); }
+
+function initials(name) {
+  return (name || 'A').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'A';
+}
+
+// Loads the session. Resolves false when unauthenticated so boot can redirect.
+async function loadIdentity() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) return false;
+    const data = await res.json();
+    auth = { user: data.user, roles: data.roles || auth.roles, allPermissions: data.allPermissions || [] };
+    applyIdentity();
+    return true;
+  } catch (_) { return false; }
+}
+
+function applyIdentity() {
+  const u = auth.user; if (!u) return;
+  const set = (id, t) => { const el = $(id); if (el) el.textContent = t; };
+  const roleLabel = ROLE_LABEL[u.role] || u.role;
+
+  set('user-name', u.name); set('user-role', roleLabel); set('user-initials', initials(u.name));
+  set('up-name', u.name);   set('up-role', roleLabel);   set('up-initials', initials(u.name));
+  set('up-username', '@' + u.username);
+  set('perm-role-name', roleLabel);
+
+  // Permission checklist
+  const list = $('perm-list');
+  if (list) {
+    list.innerHTML = (auth.allPermissions.length ? auth.allPermissions : Object.keys(PERM_LABEL)).map(p => {
+      const on = can(p);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;${on ? '' : 'opacity:.45'}">
+                <i class="fa-solid ${on ? 'fa-circle-check' : 'fa-circle-minus'}" style="color:${on ? '#12783f' : '#b0b0b0'};font-size:12px"></i>
+                <span>${escHtml(PERM_LABEL[p] || p)}</span>
+              </div>`;
+    }).join('');
+  }
+
+  // Role dropdown on the create form
+  const roleSel = $('nu-role');
+  if (roleSel && !roleSel.options.length) {
+    roleSel.innerHTML = auth.roles.map(r => `<option value="${r}"${r === 'viewer' ? ' selected' : ''}>${ROLE_LABEL[r] || r}</option>`).join('');
+  }
+
+  gateUiByPermission();
+}
+
+// Hides or disables what this role cannot do.
+function gateUiByPermission() {
+  $('um-manage').classList.toggle('hidden', !can('users.view'));
+  $('um-denied').classList.toggle('hidden', can('users.view'));
+  // Without users.view the counts can never be loaded — show nothing rather
+  // than four zeroes that read as "there are no users".
+  $('um-tiles').classList.toggle('hidden', !can('users.view'));
+  $('nav-audit').classList.toggle('hidden', !can('audit.view'));
+  $('view-audit').classList.toggle('hidden', !can('audit.view') || $('view-audit').classList.contains('hidden'));
+
+  // Scan / review buttons in the operations panel
+  const scanBtn = $('scan-btn'), gitBtn = $('git-pull-btn');
+  if (scanBtn && !can('scan.run')) { scanBtn.disabled = true; scanBtn.title = 'Your role cannot run scans'; }
+  if (gitBtn  && !can('scan.run')) { gitBtn.disabled  = true; gitBtn.title  = 'Your role cannot run git operations'; }
+
+  // Settings page is read-only without settings.edit
+  if (!can('settings.edit')) {
+    document.querySelectorAll('#view-settings .switch, #view-settings select, #view-settings input')
+      .forEach(el => { el.disabled = true; el.style.opacity = '.5'; el.style.pointerEvents = 'none'; });
+  }
+}
+
+async function logout() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
+  logAudit('Signed out', auth.user ? auth.user.username : '', 'ok');
+  window.location.href = '/login';
+}
+
+// ── User CRUD ───────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (res.status === 401) { window.location.href = '/login'; throw new Error('Session expired'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+async function loadUsers() {
+  if (!can('users.view')) return;
+  try {
+    const data = await api('GET', '/api/users');
+    allUsers = data.users || [];
+    auth.roles = data.roles || auth.roles;
+    auth.allPermissions = data.allPermissions || auth.allPermissions;
+    renderUsers();
+    renderRoleMatrix();
+  } catch (e) {
+    toast('Could not load users', e.message, 'fail');
+  }
+}
+
+function renderUsers() {
+  const body = $('um-body'); if (!body) return;
+  const active = allUsers.filter(u => u.active).length;
+  $('um-total').textContent    = allUsers.length;
+  $('um-admins').textContent   = allUsers.filter(u => u.role === 'admin').length;
+  $('um-active').textContent   = active;
+  $('um-disabled').textContent = allUsers.length - active;
+  $('um-empty').classList.toggle('hidden', allUsers.length > 0);
+
+  const when = t => t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Never';
+  body.innerHTML = allUsers.map(u => {
+    const me = auth.user && u.id === auth.user.id;
+    return `
+    <tr>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${u.active ? '#22c55e' : '#c9c9c9'}"></span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:30px;height:30px;font-size:11px">${escHtml(initials(u.name))}</div>
+          <div>
+            <div style="font-weight:600">${escHtml(u.name)}${me ? ' <span style="font-weight:400;color:var(--muted);font-size:11px">(you)</span>' : ''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="mono" style="font-size:11.5px">${escHtml(u.username)}</td>
+      <td style="color:var(--muted);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${escHtml(u.email || '—')}</td>
+      <td>
+        ${can('users.edit')
+          ? `<select onchange="changeRole('${u.id}', this.value)" style="height:31px;border-radius:8px;border:1px solid var(--border);background:#fff;padding:0 8px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer">
+               ${auth.roles.map(r => `<option value="${r}"${r === u.role ? ' selected' : ''}>${ROLE_LABEL[r] || r}</option>`).join('')}
+             </select>`
+          : `<span class="pill pill-idle">${escHtml(ROLE_LABEL[u.role] || u.role)}</span>`}
+      </td>
+      <td><span class="pill ${u.active ? 'pill-ok' : 'pill-idle'}">${u.active ? 'Active' : 'Disabled'}</span></td>
+      <td style="color:var(--muted);font-size:11.5px">${escHtml(when(u.createdAt))}</td>
+      <td style="color:var(--muted);font-size:11.5px">${escHtml(when(u.lastLogin))}</td>
+      <td>
+        <div style="display:flex;gap:12px;color:var(--muted)">
+          ${can('users.edit') ? `<i class="fa-solid fa-key" title="Reset password" style="cursor:pointer" onclick="resetPassword('${u.id}','${escHtml(u.username)}')"></i>` : ''}
+          ${can('users.edit') ? `<i class="fa-solid ${u.active ? 'fa-user-slash' : 'fa-user-check'}" title="${u.active ? 'Disable' : 'Enable'} account" style="cursor:pointer" onclick="toggleActive('${u.id}', ${!u.active})"></i>` : ''}
+          ${can('users.delete') && !me ? `<i class="fa-solid fa-trash" title="Delete user" style="cursor:pointer" onclick="deleteUser('${u.id}','${escHtml(u.username)}')"></i>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRoleMatrix() {
+  const table = $('role-matrix'); if (!table) return;
+  const perms = auth.allPermissions.length ? auth.allPermissions : Object.keys(PERM_LABEL);
+  // Mirrors the server's ROLE_PERMISSIONS; admin holds everything.
+  const grants = {
+    admin:    () => true,
+    reviewer: p => ['repos.view', 'reports.view', 'scan.run', 'review.run', 'projects.edit', 'audit.view'].includes(p),
+    viewer:   p => ['repos.view', 'reports.view'].includes(p)
+  };
+  table.innerHTML = `
+    <thead><tr><th>Permission</th>${auth.roles.map(r => `<th style="text-align:center">${escHtml(ROLE_LABEL[r] || r)}</th>`).join('')}</tr></thead>
+    <tbody>${perms.map(p => `
+      <tr>
+        <td style="font-weight:500">${escHtml(PERM_LABEL[p] || p)} <span class="mono" style="font-size:10px;color:var(--muted)">${escHtml(p)}</span></td>
+        ${auth.roles.map(r => {
+          const on = (grants[r] || (() => false))(p);
+          return `<td style="text-align:center"><i class="fa-solid ${on ? 'fa-circle-check' : 'fa-minus'}" style="color:${on ? '#12783f' : '#d0d0d0'}"></i></td>`;
+        }).join('')}
+      </tr>`).join('')}</tbody>`;
+}
+
+function suggestPassword() {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  $('nu-password').value = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, '').slice(0, 12);
+}
+
+async function createUser() {
+  const msg = $('nu-msg');
+  const payload = {
+    username: $('nu-username').value.trim(),
+    name:     $('nu-name').value.trim(),
+    email:    $('nu-email').value.trim(),
+    role:     $('nu-role').value,
+    password: $('nu-password').value
+  };
+  try {
+    const { user } = await api('POST', '/api/users', payload);
+    msg.style.color = '#12783f';
+    msg.textContent = `✓ ${user.username} created`;
+    ['nu-username', 'nu-name', 'nu-email', 'nu-password'].forEach(id => { $(id).value = ''; });
+    logAudit('User created', `${user.username} (${user.role})`, 'ok');
+    toast('User created', `${user.name} can now sign in as ${ROLE_LABEL[user.role] || user.role}.`, 'ok');
+    loadUsers();
+  } catch (e) {
+    msg.style.color = '#c4145c';
+    msg.textContent = e.message;
+  }
+}
+
+async function changeRole(id, role) {
+  try {
+    await api('PATCH', `/api/users/${id}`, { role });
+    logAudit('User role changed', `${id.slice(0, 8)} → ${role}`, 'ok');
+    toast('Role updated', `Account is now ${ROLE_LABEL[role] || role}.`, 'ok');
+    loadUsers();
+  } catch (e) { toast('Could not change role', e.message, 'fail'); loadUsers(); }
+}
+
+async function toggleActive(id, active) {
+  try {
+    await api('PATCH', `/api/users/${id}`, { active });
+    logAudit(active ? 'User enabled' : 'User disabled', id.slice(0, 8), 'ok');
+    loadUsers();
+  } catch (e) { toast('Could not update account', e.message, 'fail'); }
+}
+
+async function resetPassword(id, username) {
+  const pwd = prompt(`New password for ${username} (minimum 8 characters):`);
+  if (!pwd) return;
+  try {
+    await api('PATCH', `/api/users/${id}`, { password: pwd });
+    logAudit('Password reset', username, 'ok');
+    toast('Password updated', `Share the new password with ${username} securely.`, 'ok');
+  } catch (e) { toast('Could not reset password', e.message, 'fail'); }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete the account "${username}"? This cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/api/users/${id}`);
+    logAudit('User deleted', username, 'ok');
+    toast('User deleted', `${username} can no longer sign in.`, 'ok');
+    loadUsers();
+  } catch (e) { toast('Could not delete user', e.message, 'fail'); }
+}
+
+async function changeOwnPassword() {
+  const current = $('own-current').value;
+  const pwd     = $('own-pwd').value;
+  if (!current) { toast('Current password required', 'Confirm your existing password to change it.', 'warn'); return; }
+  if (!pwd || pwd.length < 8) { toast('Password too short', 'Use at least 8 characters.', 'warn'); return; }
+  try {
+    // Self-service endpoint — works for every role, unlike the admin reset path.
+    await api('POST', '/api/auth/password', { currentPassword: current, newPassword: pwd });
+    $('own-current').value = ''; $('own-pwd').value = '';
+    logAudit('Own password changed', auth.user.username, 'ok');
+    toast('Password changed', 'Your next sign-in uses the new password.', 'ok');
+  } catch (e) { toast('Could not change password', e.message, 'fail'); }
+}
+
+// ── Redaction helpers (PII Settings) ────────────────────────────────────────
+function maskPath(p) {
+  if (!settings.maskPaths || !p) return p || '';
+  const parts = String(p).split(/[\\/]/);
+  return parts.length > 1 ? '…/' + parts[parts.length - 1] : p;
+}
+function maybeMaskEmail(e) {
+  if (!settings.maskEmail || !e) return e || '';
+  const [user, domain] = String(e).split('@');
+  if (!domain) return '•••';
+  return user.slice(0, 2) + '•••@' + domain.replace(/^[^.]+/, m => m[0] + '•••');
+}
+
+// ── Toasts ──────────────────────────────────────────────────────────────────
+function toast(title, body, kind) {
+  const host = $('toast-host');
+  if (!host) return;
+  const accent = kind === 'fail' ? '#e82276' : kind === 'warn' ? '#d68b0a' : '#12783f';
+  const el = document.createElement('div');
+  el.className = 'fade-in';
+  el.style.cssText = `background:#fff;border:1px solid var(--border);border-left:4px solid ${accent};border-radius:12px;padding:12px 16px;box-shadow:0 8px 28px rgba(0,0,0,.12);max-width:330px`;
+  el.innerHTML = `<div style="font-size:13px;font-weight:700;margin-bottom:3px"></div><div style="font-size:11.5px;color:var(--muted);line-height:1.5"></div>`;
+  el.children[0].textContent = title;
+  el.children[1].textContent = body;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 5200);
+}
+
+// ── Audit trail (client-side, this browser only) ────────────────────────────
+let auditLog = readLS(LS.audit, []);
+
+function logAudit(action, target, result) {
+  auditLog.unshift({ ts: new Date().toISOString(), action, target: target || '', result: result || 'ok' });
+  auditLog = auditLog.slice(0, 300);
+  writeLS(LS.audit, auditLog);
+  if (!$('view-audit').classList.contains('hidden')) renderAudit();
+}
+
+function renderAudit() {
+  const body = $('audit-body'); if (!body) return;
+  const q = ($('audit-search').value || '').toLowerCase();
+  const rows = auditLog.filter(a => !q || (a.action + ' ' + a.target).toLowerCase().includes(q));
+  $('audit-count').textContent = `${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}`;
+  $('audit-empty').classList.toggle('hidden', rows.length > 0);
+  const dot = r => r === 'fail' ? '#e82276' : r === 'running' ? '#d68b0a' : '#22c55e';
+  body.innerHTML = rows.map(a => `
+    <tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot(a.result)}"></span></td>
+      <td style="color:var(--muted);font-size:12px">${escHtml(new Date(a.ts).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium' }))}</td>
+      <td style="font-weight:600">${escHtml(a.action)}</td>
+      <td style="color:var(--muted);max-width:340px;overflow:hidden;text-overflow:ellipsis">${escHtml(a.target)}</td>
+      <td><span class="pill ${a.result === 'fail' ? 'pill-fail' : a.result === 'running' ? 'pill-warn' : 'pill-ok'}">${escHtml(a.result)}</span></td>
+    </tr>`).join('');
+}
+
+function clearAudit() {
+  if (!confirm('Clear the local audit trail? This cannot be undone.')) return;
+  auditLog = []; writeLS(LS.audit, auditLog); renderAudit();
+}
+
+function exportAudit() {
+  const blob = new Blob([JSON.stringify(auditLog, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sonarai-audit-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Scan history (client-side record of runs launched from this dashboard) ──
+let scanHistory = readLS(LS.history, []);
+
+// SonarQube's measures API returns ratings as numeric strings ("1.0".."5.0"),
+// not letters — map them so the A–E rating badges actually render.
+function ratingLetter(v) {
+  if (v === undefined || v === null || v === '') return '—';
+  const s = String(v).trim();
+  if (/^[A-E]$/i.test(s)) return s.toUpperCase();
+  const n = Math.round(parseFloat(s));
+  return ['A', 'B', 'C', 'D', 'E'][n - 1] || '—';
+}
+
+function fmtDuration(ms) {
+  if (!ms || ms < 0) return '—';
+  const s = ms / 1000;
+  return s < 60 ? s.toFixed(1) + 's' : Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+}
+
+function recordScanRun({ success, branch, repoName, projectKey, report, error }) {
+  activeScans = 0;
+  const m = (report && report.metrics) || {};
+  const entry = {
+    id: 'run-' + Date.now(),
+    ts: new Date().toISOString(),
+    repoName: repoName || currentRepo,
+    branch:   branch   || currentBranch,
+    projectKey: projectKey || '',
+    status: success ? 'success' : 'failed',
+    durationMs: scanStartedAt ? Date.now() - scanStartedAt : 0,
+    stages: scanStepState.slice(),
+    error: success ? '' : String(error || 'Unknown error'),
+    metrics: {
+      bugs: m.bugs || 0, vulnerabilities: m.vulnerabilities || 0, code_smells: m.code_smells || 0,
+      ncloc: m.ncloc || 0, duplicated_lines_density: m.duplicated_lines_density || 0
+    },
+    ratings: {
+      reliability:     ratingLetter(m.reliability_rating),
+      security:        ratingLetter(m.security_rating),
+      maintainability: ratingLetter(m.sqale_rating)
+    },
+    aiScore: null
+  };
+  scanStartedAt = 0;
+
+  if (settings.keepHistory) {
+    scanHistory.unshift(entry);
+    scanHistory = scanHistory.slice(0, 100);
+    writeLS(LS.history, scanHistory);
+  }
+  logAudit(success ? 'SonarQube scan completed' : 'SonarQube scan failed',
+           `${entry.repoName} · ${entry.branch}`, success ? 'ok' : 'fail');
+  if (settings.toastScan) {
+    toast(success ? 'Scan complete' : 'Scan failed',
+          `${entry.repoName} · ${entry.branch}${success ? ` — ${entry.metrics.bugs} bugs, ${entry.metrics.vulnerabilities} vulnerabilities` : ` — ${entry.error}`}`,
+          success ? 'ok' : 'fail');
+  }
+  renderScanHistory();
+}
+
+function renderScanHistory() {
+  const body = $('sh-body'); if (!body) return;
+  const q      = ($('sh-search').value || '').toLowerCase();
+  const status = $('sh-status').value;
+  const rows = scanHistory.filter(r =>
+    (status === 'all' || r.status === status) &&
+    (!q || `${r.repoName} ${r.branch} ${r.projectKey}`.toLowerCase().includes(q))
+  );
+
+  // Tiles reflect the full history, not the filtered slice
+  const done = scanHistory.filter(r => r.durationMs > 0);
+  const ok   = scanHistory.filter(r => r.status === 'success').length;
+  $('sh-total').textContent  = scanHistory.length;
+  $('sh-active').textContent = activeScans;
+  $('sh-avg').textContent    = done.length ? fmtDuration(done.reduce((s, r) => s + r.durationMs, 0) / done.length) : '—';
+  $('sh-rate').textContent   = scanHistory.length ? Math.round(ok / scanHistory.length * 100) + '%' : '—';
+  $('sh-count').textContent  = `${rows.length} ${rows.length === 1 ? 'run' : 'runs'}`;
+  $('sh-empty').classList.toggle('hidden', rows.length > 0);
+
+  // Overview mirrors the same data
+  const runsEl = $('overview-runs');
+  $('stat-scan-runs').textContent = scanHistory.length;
+  $('nav-badge-scans').textContent = scanHistory.length;
+  if (runsEl) {
+    runsEl.innerHTML = scanHistory.length ? scanHistory.slice(0, 5).map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 11px;background:var(--surface);border-radius:9px;margin-bottom:6px">
+        <div style="min-width:0">
+          <div style="font-weight:600;color:var(--text);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.repoName)} <span style="font-weight:400;color:var(--muted)">(${escHtml(r.branch)})</span></div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${escHtml(new Date(r.ts).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }))} · ${fmtDuration(r.durationMs)}</div>
+        </div>
+        <span class="pill ${r.status === 'success' ? 'pill-ok' : 'pill-fail'}">${r.status === 'success' ? 'Completed' : 'Failed'}</span>
+      </div>`).join('')
+      : `<div style="padding:14px;background:var(--surface);border-radius:10px;text-align:center">No scan runs recorded on this device yet</div>`;
+  }
+
+  const base = window._appConfig?.sonarUrl || '';
+  body.innerHTML = rows.map(r => {
+    const dots = (r.stages || []).map(s =>
+      `<span class="stage-dot ${s === 'done' ? '' : s === 'error' ? 'fail' : 'pending'}"></span>`).join('');
+    const link = base && r.projectKey ? `${base}/dashboard?id=${encodeURIComponent(r.projectKey)}` : '';
+    const issues = r.metrics.bugs + r.metrics.vulnerabilities + r.metrics.code_smells;
+    return `
+    <tr>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${r.status === 'success' ? '#22c55e' : '#e82276'}"></span></td>
+      <td style="font-weight:600">${escHtml(r.repoName)}</td>
+      <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${escHtml(r.branch)}</td>
+      <td class="mono" style="font-size:10.5px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis">${settings.hideKeys ? '••••••••' : escHtml(r.projectKey || '—')}</td>
+      <td><span class="pill ${r.status === 'success' ? 'pill-ok' : 'pill-fail'}"><i class="fa-solid ${r.status === 'success' ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> ${r.status === 'success' ? 'Completed' : 'Failed'}</span></td>
+      <td>${r.status === 'success'
+            ? `<span style="display:inline-flex;gap:4px" title="Reliability / Security / Maintainability">
+                 <span class="rating rating-${r.ratings.reliability}"    style="width:22px;height:22px;font-size:11px">${escHtml(r.ratings.reliability)}</span>
+                 <span class="rating rating-${r.ratings.security}"       style="width:22px;height:22px;font-size:11px">${escHtml(r.ratings.security)}</span>
+                 <span class="rating rating-${r.ratings.maintainability}" style="width:22px;height:22px;font-size:11px">${escHtml(r.ratings.maintainability)}</span>
+               </span>`
+            : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${r.status === 'success' ? `<span style="font-weight:600">${issues}</span> <span style="color:var(--muted);font-size:11px">total</span>` : '—'}</td>
+      <td class="mono" style="font-size:11px">${r.metrics.ncloc ? r.metrics.ncloc.toLocaleString() : '—'}</td>
+      <td class="mono" style="font-size:11px">${fmtDuration(r.durationMs)}</td>
+      <td><span class="stage-dots" title="Begin · Build · End">${dots}</span></td>
+      <td style="color:var(--muted);font-size:11.5px">${escHtml(new Date(r.ts).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }))}</td>
+      <td>
+        <div style="display:flex;gap:8px;color:var(--muted)">
+          ${link ? `<a href="${link}" target="_blank" title="Open in SonarQube" style="color:var(--muted)"><i class="fa-solid fa-up-right-from-square"></i></a>` : ''}
+          ${r.aiScore !== null ? `<span title="AI review score: ${r.aiScore}/100" style="cursor:pointer;color:var(--accent);font-weight:700;font-size:11px" onclick="showView('ai-reports');openAiReportDetail('${escHtml(r.projectKey)}')">${r.aiScore}</span>` : ''}
+          <i class="fa-solid fa-trash" title="Remove from history" style="cursor:pointer" onclick="deleteScanRun('${r.id}')"></i>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteScanRun(id) {
+  scanHistory = scanHistory.filter(r => r.id !== id);
+  writeLS(LS.history, scanHistory);
+  renderScanHistory();
+}
+
+function clearScanHistory() {
+  if (!scanHistory.length) return;
+  if (!confirm('Clear the local scan history? Reports stored on the server are not affected.')) return;
+  scanHistory = []; writeLS(LS.history, scanHistory);
+  logAudit('Scan history cleared', 'Local scan run records removed', 'ok');
+  renderScanHistory();
+}
+
+// ── Quality gate (agent policy, evaluated over stored AI reviews) ───────────
+function gateFor(r) {
+  if (r.secretsCount > 0)              return { pass: false, why: `${r.secretsCount} secret${r.secretsCount === 1 ? '' : 's'} flagged` };
+  if ((r.score || 0) < settings.threshold) return { pass: false, why: `Score ${r.score} below ${settings.threshold}` };
+  return { pass: true, why: 'All conditions met' };
+}
+
+function renderQualityGate() {
+  const body = $('qg-body'); if (!body) return;
+  const rows = allAiReports.map(r => ({ ...r, gate: gateFor(r) }));
+  const pass = rows.filter(r => r.gate.pass).length;
+  const secretBlocks = rows.filter(r => r.secretsCount > 0).length;
+
+  $('qg-pass').textContent    = pass;
+  $('qg-fail').textContent    = rows.length - pass;
+  $('qg-secrets').textContent = secretBlocks;
+  $('qg-rate').textContent    = rows.length ? Math.round(pass / rows.length * 100) + '%' : '—';
+  $('qg-empty').classList.toggle('hidden', rows.length > 0);
+
+  // Overview tile mirrors the gate
+  const rateEl = $('ov-gate-rate');
+  if (rateEl) {
+    rateEl.textContent = rows.length ? Math.round(pass / rows.length * 100) + '%' : '—';
+    $('ov-gate-detail').textContent = rows.length ? `${pass} of ${rows.length} reviews passing` : 'No reviews yet';
+  }
+
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-weight:600">${escHtml(r.repoName)}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${escHtml(r.branch)}</td>
+      <td><span class="pill ${r.gate.pass ? 'pill-ok' : 'pill-fail'}"><i class="fa-solid ${r.gate.pass ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> ${r.gate.pass ? 'Passed' : 'Failed'}</span></td>
+      <td><span class="mono" style="font-weight:700;color:${r.score >= settings.threshold ? '#12783f' : '#c4145c'}">${r.score}</span><span style="color:var(--muted);font-size:11px">/100</span></td>
+      <td>${r.totalIssues}</td>
+      <td>${r.secretsCount > 0 ? `<span class="pill pill-fail">🔐 ${r.secretsCount}</span>` : '<span class="pill pill-ok">0</span>'}</td>
+      <td style="color:var(--muted);font-size:11.5px">${escHtml(new Date(r.timestamp).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }))}</td>
+      <td><span style="color:var(--accent);font-size:11.5px;font-weight:600;cursor:pointer" onclick="showView('ai-reports');openAiReportDetail('${escHtml(r.projectKey)}')">Open report →</span></td>
+    </tr>`).join('');
+}
+
+// ── AI insights ─────────────────────────────────────────────────────────────
+function renderInsights() {
+  if (!$('ins-reviews')) return;
+  const reports = allAiReports;
+  const totalIssues = reports.reduce((s, r) => s + (r.totalIssues || 0), 0);
+  const secrets     = reports.reduce((s, r) => s + (r.secretsCount || 0), 0);
+  const avg = reports.length ? Math.round(reports.reduce((s, r) => s + (r.score || 0), 0) / reports.length) : 0;
+
+  $('ins-reviews').textContent = reports.length;
+  $('ins-avg').textContent     = reports.length ? avg : '—';
+  $('ins-issues').textContent  = totalIssues;
+  $('ins-secrets').textContent = secrets;
+  $('ins-secrets').style.color = secrets > 0 ? '#c4145c' : '';
+
+  // Score trend — oldest to newest, last 12
+  const trend = reports.slice(0, 12).reverse();
+  $('ins-trend').innerHTML = trend.length ? trend.map(r => {
+    const h = Math.max(6, (r.score || 0));
+    const col = r.secretsCount > 0 ? '#c4145c' : r.score >= settings.threshold ? 'linear-gradient(180deg,#ff6aa8,#e82276)' : '#c9c9c9';
+    return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:6px"
+                 title="${escHtml(r.repoName)} · ${escHtml(r.branch)} — ${r.score}/100">
+              <div style="font-size:10px;font-weight:700;color:var(--muted)">${r.score}</div>
+              <div style="width:100%;max-width:34px;height:${h}%;background:${col};border-radius:6px 6px 2px 2px"></div>
+            </div>`;
+  }).join('') : '<div class="empty-state" style="width:100%">No reviews yet</div>';
+
+  // Issues per repository
+  const byRepo = {};
+  reports.forEach(r => { byRepo[r.repoName] = (byRepo[r.repoName] || 0) + (r.totalIssues || 0); });
+  const repoRows = Object.entries(byRepo).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxIssues = Math.max(1, ...repoRows.map(r => r[1]));
+  $('ins-repos').innerHTML = repoRows.length ? repoRows.map(([name, n]) => `
+    <div class="bar-row">
+      <div style="width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${escHtml(name)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(n / maxIssues * 100).toFixed(1)}%"></div></div>
+      <div class="mono" style="width:38px;text-align:right;font-size:11px">${n}</div>
+    </div>`).join('') : '<div class="empty-state">No reviews yet</div>';
+
+  // Worst-scoring branches
+  const worst = [...reports].sort((a, b) => (a.score || 0) - (b.score || 0)).slice(0, 6);
+  $('ins-attention').innerHTML = worst.length ? worst.map(r => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface);border-radius:10px;margin-bottom:7px;cursor:pointer"
+         onclick="showView('ai-reports');openAiReportDetail('${escHtml(r.projectKey)}')">
+      <div class="mono" style="font-size:17px;font-weight:700;width:44px;color:${r.score >= settings.threshold ? '#12783f' : '#c4145c'}">${r.score}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.repoName)} <span style="font-weight:400;color:var(--muted)">(${escHtml(r.branch)})</span></div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:2px">${r.totalIssues} issue${r.totalIssues === 1 ? '' : 's'}${r.secretsCount > 0 ? ` · 🔐 ${r.secretsCount} secret${r.secretsCount === 1 ? '' : 's'}` : ''}</div>
+      </div>
+      <span class="pill ${gateFor(r).pass ? 'pill-ok' : 'pill-fail'}">${gateFor(r).pass ? 'Gate passed' : 'Gate failed'}</span>
+    </div>`).join('') : '<div class="empty-state">No reviews yet</div>';
+
+  // Distinct SonarQube projects seen by this dashboard
+  const keys = new Set([...reports.map(r => r.projectKey), ...scanHistory.map(r => r.projectKey)].filter(Boolean));
+  const proj = $('sq-projects'); if (proj) proj.textContent = keys.size;
+}
+
+// ── Token usage (estimated — the agent does not record Claude's usage yet) ──
+const TOK_BASE_IN = 900, TOK_PER_ISSUE = 60, TOK_OUT_EST = 1400;
+
+function renderTokenUsage() {
+  if (!$('tok-reviews')) return;
+  const reports = allAiReports;
+  const estIn  = reports.reduce((s, r) => s + TOK_BASE_IN + (r.totalIssues || 0) * TOK_PER_ISSUE, 0);
+  const estOut = reports.length * TOK_OUT_EST;
+
+  $('tok-reviews').textContent = reports.length;
+  $('tok-in').textContent      = estIn.toLocaleString();
+  $('tok-out').textContent     = estOut.toLocaleString();
+
+  $('tok-table').innerHTML = reports.length ? `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+      Estimate: ${TOK_BASE_IN} prompt tokens + ${TOK_PER_ISSUE} per reported issue in, ~${TOK_OUT_EST.toLocaleString()} out per review.
+    </div>
+    ${reports.slice(0, 10).map(r => `
+      <div class="kv">
+        <span class="kv-k" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.repoName)} <span style="opacity:.7">(${escHtml(r.branch)})</span></span>
+        <span class="kv-v">${(TOK_BASE_IN + (r.totalIssues || 0) * TOK_PER_ISSUE).toLocaleString()} in / ~${TOK_OUT_EST.toLocaleString()} out</span>
+      </div>`).join('')}`
+    : '<div class="empty-state">No AI reviews run yet</div>';
+}
+
+// ── Integrations & permissions ──────────────────────────────────────────────
+function renderIntegrations() {
+  const grid = $('integrations-grid'); if (!grid) return;
+  const c = window._appConfig || {};
+  const cards = [
+    { icon: 'fa-brands fa-github',        name: 'GitHub',    on: !!c.githubConfigured, detail: c.githubUsername ? '@' + c.githubUsername : 'No account resolved',
+      note: 'Lists repositories and branches, and provides the credentials for local clone/checkout.', env: 'GITHUB_TOKEN' },
+    { icon: 'fa-solid fa-shield-halved',  name: 'SonarQube', on: !!c.sonarConfigured,  detail: c.sonarUrl || '—',
+      note: 'Runs the analysis and serves metrics and issues back over the Web API.', env: 'SONAR_TOKEN' },
+    { icon: 'fa-solid fa-robot',          name: 'Claude AI', on: !!c.aiConfigured,     detail: c.aiModel || '—',
+      note: 'Performs the Level 1 review over SonarQube findings — never over source code.', env: 'ANTHROPIC_API_KEY' },
+    { icon: 'fa-solid fa-envelope',       name: 'Email',     on: !!c.smtpConfigured,   detail: c.smtpHost || 'Not configured',
+      note: 'Delivers scan-failure alerts and the consolidated AI review report.', env: 'SMTP_HOST' }
+  ];
+  grid.innerHTML = cards.map(k => `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="tile-icon"><i class="${k.icon}"></i></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700">${k.name}</div>
+          <div class="mono" style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis">${escHtml(k.detail)}</div>
+        </div>
+        <span class="pill ${k.on ? 'pill-ok' : 'pill-warn'}"><i class="fa-solid ${k.on ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i> ${k.on ? 'Configured' : 'Not configured'}</span>
+      </div>
+      <div class="card-note">${k.note}</div>
+      <div class="kv" style="margin-top:10px;border-top:1px solid #f3f3f3;padding-top:10px"><span class="kv-k">Env variable</span><span class="kv-v">${k.env}</span></div>
+    </div>`).join('');
+}
+
+function checkAgentHealth() {
+  const el = $('sq-agent-health'); if (!el) return;
+  fetch('/api/health')
+    .then(r => r.json())
+    .then(h => {
+      el.textContent = h.ok ? 'Healthy' : 'Degraded';
+      el.style.color = h.ok ? '#12783f' : '#c4145c';
+      $('sq-checked').textContent = new Date(h.ts || Date.now()).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'medium' });
+    })
+    .catch(() => {
+      el.textContent = 'Unreachable';
+      el.style.color = '#c4145c';
+      $('sq-checked').textContent = 'failed at ' + new Date().toLocaleTimeString('en-IN');
+    });
+}
+
+// ── Extra listeners: feed the audit trail and attach AI scores to runs ───────
+socket.on('git-result', r => {
+  logAudit(r.success ? 'Git fetch + checkout' : 'Git fetch + checkout failed',
+           `${currentRepo} · ${currentBranch}`, r.success ? 'ok' : 'fail');
+});
+
+socket.on('review-result', ({ success, review, projectKey, error }) => {
+  if (!success) {
+    logAudit('AI review failed', `${currentRepo} · ${currentBranch} — ${error || ''}`, 'fail');
+    if (settings.toastReview) toast('AI review failed', String(error || 'Unknown error'), 'fail');
+    return;
+  }
+  const secrets = review?.secretsFound?.count || 0;
+  logAudit('AI review completed', `${currentRepo} · ${currentBranch} — score ${review.score}/100`, 'ok');
+
+  // Stamp the score onto the matching scan run so history shows the follow-up
+  const run = scanHistory.find(r => r.projectKey === (projectKey || currentProjectKey));
+  if (run) { run.aiScore = review.score ?? null; writeLS(LS.history, scanHistory); renderScanHistory(); }
+
+  if (secrets > 0 && settings.toastSecrets) {
+    toast('Secrets flagged', `${secrets} hardcoded credential${secrets === 1 ? '' : 's'} found in ${currentRepo} · ${currentBranch}`, 'fail');
+  } else if (settings.toastReview) {
+    toast('AI review complete', `${currentRepo} · ${currentBranch} — score ${review.score}/100`, 'ok');
+  }
+});
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+// Identity first: without a valid session there is nothing to render, and the
+// server would 401 every call anyway.
+(async () => {
+  const signedIn = await loadIdentity();
+  if (!signedIn) { window.location.href = '/login'; return; }
+
+  applySettings();
+  await loadServerConfig();
+  checkAgentHealth();
+  renderAudit();
+  if (can('users.view')) loadUsers();
+  if (settings.landing !== 'overview') showView(settings.landing);
+  logAudit('Signed in', `${auth.user.username} (${auth.user.role})`, 'ok');
+})();
 
 </script>
 </body>
