@@ -221,3 +221,5 @@
 | 16:58 | Verified: unauth redirect, bad login, admin CRUD, last-admin guards, reviewer/viewer 403s | puppeteer + curl | verified | ~4200 |
 | 17:22 | Committed + pushed to branch feat/login-rbac-dashboard (2 commits, +2667/-155) | 10 files | pushed | ~1800 |
 | 17:25 | SESSION END — Dashboard shell rebuild (5 nav groups, 11 new views) + BusinessNext login page + full RBAC auth. 4 bugs logged (bug-013..017). OPEN: branch not yet merged to main. | server.js, public/index.html, public/login.html, public/bn-logo.svg, .env.example | done | ~95000 |
+| 17:34 | Merged feat/login-rbac-dashboard into main, pushed, deleted branch (local+remote) | git | done | ~900 |
+| 17:36 | Recorded git preference: commit direct to main, no branches/PRs | .wolf/cerebrum.md | done | ~400 |

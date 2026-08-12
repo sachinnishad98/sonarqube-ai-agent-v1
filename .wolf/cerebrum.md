@@ -11,6 +11,7 @@
 - **Hindi-English Mix:** User prefers Hindi-English communication style (Hinglish)
 - **Reference screenshots for UI work (2026-08-12):** User drops reference screenshots in `D:\SonarQube\ErrorPng\` (1.png, 2.png, …) and expects them read and matched *structurally*, not copy-pasted. Explicit instruction: "copy paste mat karna — mere sonarqube agent se related jo hoga wahi rakhna" — adapt every label/column/section to this agent's own domain (repos, branches, scans, AI reviews), never carry over the reference app's domain nouns.
 - **Branding (2026-08-12):** Product name "SonarQube AI Agent", business unit line "BUSINESSNEXT CDG" underneath, SonarQube three-arc mark (inline SVG, white on the pink gradient tile) as the logo. Pink is #E82276.
+- **Git workflow — main only (2026-08-12):** All work is committed and pushed directly to `main`. No feature branches, no PRs. User said "sara code main branch par hi karna hai … next time se sara kuch main branch pr hi karna" after a push to a feature branch forced an extra merge step. Still scan the staged diff for credentials before every commit, and keep `.env` / `data/` gitignored.
 - **Dashboards should look "bhara" (full):** User dislikes sparse pages — wants stat tiles, tables, grouped nav and real content on every screen rather than placeholder panels.
 - **Security Focus:** User wants comprehensive security scanning including secrets, API keys, passwords detection
 - **Detailed Metrics:** User wants detailed code metrics displayed prominently (total lines, secrets found/not found)
