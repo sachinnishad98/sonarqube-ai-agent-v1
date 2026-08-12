@@ -21,7 +21,9 @@ const { execFile, spawn } = require('child_process');
 const path       = require('path');
 const fs         = require('fs');
 const fetch      = require('node-fetch');
-require('dotenv').config();
+// override:true — .env must win over any stale OS-level env vars of the same
+// name (dotenv otherwise silently keeps whatever the shell/system already has set).
+require('dotenv').config({ override: true });
 
 const app    = express();
 const server = http.createServer(app);
@@ -317,6 +319,89 @@ async function fetchSonarReport(projectKey) {
   return { projectKey, metrics, issues: issues.issues || [], totalIssues: issues.total || 0 };
 }
 
+// ─── SECRETS CLASSIFICATION & REDACTION ──────────────────────────────────────
+// SonarQube's "Text Code Quality and Security" plugin flags hardcoded
+// credentials as issues with a `secrets:` rule prefix. We also match on the
+// issue message as a fallback in case a language-specific rule (not the
+// dedicated secrets repo) is what caught it. Neither Sonar's issue payload
+// nor our own code ever carries the actual secret value — only file/line/rule.
+const SECRET_MESSAGE_PATTERN = /hard-?coded|credential|secret|password|api[\s_-]?key|access[\s_-]?token|private[\s_-]?key|auth[\s_-]?token/i;
+
+function isSecretIssue(issue) {
+  const rule = String(issue.rule || '');
+  const msg  = String(issue.message || '');
+  return rule.toLowerCase().startsWith('secrets:') || SECRET_MESSAGE_PATTERN.test(msg);
+}
+
+// Defensive redaction — masks anything token/secret-shaped that might end up
+// in AI-generated text, even though the source data (Sonar issue metadata)
+// never contains literal secret values.
+function redactSecrets(text) {
+  if (!text) return text;
+  let out = String(text);
+  out = out.replace(/sqa_[a-zA-Z0-9]+/g,        '[REDACTED_TOKEN]');
+  out = out.replace(/sk-ant-[a-zA-Z0-9\-_]+/g,   '[REDACTED_TOKEN]');
+  out = out.replace(/ghp_[a-zA-Z0-9]+/g,         '[REDACTED_TOKEN]');
+  out = out.replace(/github_pat_[a-zA-Z0-9_]+/g, '[REDACTED_TOKEN]');
+  out = out.replace(/AKIA[0-9A-Z]{16}/g,         '[REDACTED_TOKEN]');
+  out = out.replace(/[a-zA-Z0-9+/]{40,}={0,2}/g, '[REDACTED_TOKEN]');
+  return out;
+}
+
+// ─── LOCAL LANGUAGE DETECTION (filenames only — no file content read) ───────
+const LANG_EXT_MAP = {
+  cs: { name: 'C#', type: 'backend' }, java: { name: 'Java', type: 'backend' },
+  py: { name: 'Python', type: 'backend' }, go: { name: 'Go', type: 'backend' },
+  rb: { name: 'Ruby', type: 'backend' }, php: { name: 'PHP', type: 'backend' },
+  cpp: { name: 'C++', type: 'backend' }, c: { name: 'C', type: 'backend' },
+  js: { name: 'JavaScript', type: 'backend' }, ts: { name: 'TypeScript', type: 'backend' },
+  html: { name: 'HTML', type: 'frontend' }, css: { name: 'CSS', type: 'frontend' },
+  scss: { name: 'SCSS', type: 'frontend' },
+  jsx: { name: 'React JSX', type: 'frontend' }, tsx: { name: 'React TSX', type: 'frontend' },
+  vue: { name: 'Vue', type: 'frontend' }
+};
+
+function scanLanguages(dir, buckets = { backend: {}, frontend: {} }, depth = 0, maxDepth = 4) {
+  if (depth > maxDepth) return buckets;
+  let entries;
+  try { entries = fs.readdirSync(dir); } catch (_) { return buckets; }
+  for (const name of entries) {
+    if (name === 'node_modules' || name === '.git' || name.startsWith('.')) continue;
+    const full = path.join(dir, name);
+    let stat;
+    try { stat = fs.statSync(full); } catch (_) { continue; }
+    if (stat.isDirectory()) {
+      scanLanguages(full, buckets, depth + 1, maxDepth);
+    } else if (stat.isFile()) {
+      const ext = name.split('.').pop().toLowerCase();
+      const info = LANG_EXT_MAP[ext];
+      if (info) buckets[info.type][info.name] = (buckets[info.type][info.name] || 0) + 1;
+    }
+  }
+  return buckets;
+}
+
+// ─── AI REVIEW REPORT PERSISTENCE ────────────────────────────────────────────
+const DATA_DIR        = path.join(__dirname, 'data');
+const AI_REPORTS_FILE = path.join(DATA_DIR, 'ai-reports.json');
+const MAX_STORED_REPORTS = 30;
+
+function loadAiReports() {
+  try { return JSON.parse(fs.readFileSync(AI_REPORTS_FILE, 'utf8')); }
+  catch (_) { return []; }
+}
+
+function saveAiReport(entry) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const reports = loadAiReports();
+    reports.unshift(entry);
+    fs.writeFileSync(AI_REPORTS_FILE, JSON.stringify(reports.slice(0, MAX_STORED_REPORTS), null, 2));
+  } catch (e) {
+    console.error('[ai-reports] Failed to persist:', safeError(e));
+  }
+}
+
 // ─── SOCKET EVENTS ────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`✅ Client: ${socket.id}`);
@@ -445,202 +530,59 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── 4. AI CODE REVIEW ──────────────────────────────────────────────────────
-  socket.on('ai-review', async ({ branch, repoName }) => {
+  // ── 4. AI CODE REVIEW — based on SonarQube findings, NEVER raw source ───────
+  socket.on('ai-review', async ({ branch, repoName, projectKey }) => {
     if (!rateLimiter(socket.id, 'ai-review')) return socket.emit('review-result', { success: false, error: 'Rate limit exceeded' });
     if (!validateRepoName(repoName))  return socket.emit('review-result', { success: false, error: 'Invalid repo name' });
     if (!validateBranchName(branch))  return socket.emit('review-result', { success: false, error: 'Invalid branch name' });
+    if (typeof projectKey !== 'string' || projectKey.length === 0 || projectKey.length > 200 || /[^a-zA-Z0-9_\-\.]/.test(projectKey)) {
+      return socket.emit('review-result', { success: false, error: 'No SonarQube scan found — run Sonar Scan first, then AI Review.' });
+    }
 
     const log = msg => socket.emit('review-log', msg);
-    log('🤖 Starting AI Code Review...');
+    log('🔎 Loading SonarQube findings...');
 
     if (!ANTHROPIC_KEY) {
       return socket.emit('review-result', { success: false, error: 'ANTHROPIC_API_KEY not set in .env' });
     }
 
-    const repoPath = getRepoPath(repoName);
-    if (!fs.existsSync(repoPath)) {
-      return socket.emit('review-result', { success: false, error: `Repo not found locally at ${repoPath}. Run Git Sync first!` });
-    }
-
     try {
-      let codeSnippet = '';
-      let totalCodeLines = 0;
-      let analyzedFiles = [];
-      let languagesDetected = { backend: {}, frontend: {} }; // Separate backend/frontend
-      let syntaxErrors = []; // Track syntax errors
+      const sonarReport = await fetchSonarReport(projectKey);
+      const totalCodeLines = parseInt(sonarReport.metrics.ncloc, 10) || 0;
 
-      // Function to recursively scan directory for code files
-      function scanDirectory(dir, fileList = [], depth = 0, maxDepth = 3) {
-        if (depth > maxDepth) return fileList;
-        try {
-          const files = fs.readdirSync(dir);
-          for (const file of files) {
-            const fullPath = path.join(dir, file);
-            const relativePath = fullPath.replace(repoPath, '').replace(/^[\\\/]/, '');
+      log(`📊 ${sonarReport.totalIssues} SonarQube issue(s) • ${totalCodeLines} lines of code`);
 
-            // Skip node_modules, .git, etc
-            if (file === 'node_modules' || file === '.git' || file === '.env' || file.startsWith('.')) continue;
+      // Compact, code-free payload for Claude — file/line/rule/message/type/severity only.
+      // Sorted worst-first, capped, so we never ship an unbounded prompt.
+      const severityRank = { BLOCKER: 0, CRITICAL: 1, MAJOR: 2, MINOR: 3, INFO: 4 };
+      const sonarIssues = sonarReport.issues
+        .slice()
+        .sort((a, b) => (severityRank[a.severity] ?? 9) - (severityRank[b.severity] ?? 9))
+        .slice(0, 60)
+        .map(i => ({
+          rule: i.rule,
+          type: i.type,
+          severity: i.severity,
+          file: (i.component || '').replace(`${projectKey}:`, ''),
+          line: i.line || i.textRange?.startLine || null,
+          message: redactSecrets(i.message || '')
+        }));
 
-            try {
-              const stat = fs.statSync(fullPath);
-              if (stat.isDirectory()) {
-                scanDirectory(fullPath, fileList, depth + 1, maxDepth);
-              } else if (stat.isFile()) {
-                const ext = file.split('.').pop().toLowerCase();
-                const langMap = {
-                  // Backend
-                  'cs': { name: 'C#', type: 'backend' },
-                  'java': { name: 'Java', type: 'backend' },
-                  'py': { name: 'Python', type: 'backend' },
-                  'go': { name: 'Go', type: 'backend' },
-                  'rb': { name: 'Ruby', type: 'backend' },
-                  'php': { name: 'PHP', type: 'backend' },
-                  'cpp': { name: 'C++', type: 'backend' },
-                  'c': { name: 'C', type: 'backend' },
-                  // Backend JS/TS (server-side)
-                  'js': { name: 'JavaScript', type: 'backend' },
-                  'ts': { name: 'TypeScript', type: 'backend' },
-                  // Frontend
-                  'html': { name: 'HTML', type: 'frontend' },
-                  'css': { name: 'CSS', type: 'frontend' },
-                  'scss': { name: 'SCSS', type: 'frontend' },
-                  'jsx': { name: 'React JSX', type: 'frontend' },
-                  'tsx': { name: 'React TSX', type: 'frontend' },
-                  'vue': { name: 'Vue', type: 'frontend' }
-                };
+      // Deterministic secrets classification — do NOT rely on the AI to catch
+      // this reliably. We know from Sonar's rule metadata exactly which
+      // issues are hardcoded-credential findings; the actual secret value is
+      // never present in this data, so there is nothing to leak or redact
+      // beyond the defensive pass already applied above.
+      const secretIssues = sonarReport.issues.filter(isSecretIssue).map(i => ({
+        type:        i.rule && i.rule.toLowerCase().startsWith('secrets:') ? 'Hardcoded Credential' : 'Possible Credential',
+        file:        (i.component || '').replace(`${projectKey}:`, ''),
+        line:        i.line || i.textRange?.startLine || null,
+        severity:    'critical',
+        rule:        i.rule,
+        description: redactSecrets(i.message || 'Hardcoded credential detected by SonarQube.')
+      }));
 
-                if (langMap[ext]) {
-                  fileList.push({
-                    path: fullPath,
-                    relative: relativePath,
-                    language: langMap[ext].name,
-                    type: langMap[ext].type,
-                    extension: ext
-                  });
-                }
-              }
-            } catch (_) {}
-          }
-        } catch (_) {}
-        return fileList;
-      }
-
-      try {
-        // Strategy 1: Try to get recently changed files via git diff
-        const changed = await gitExec(['diff', 'HEAD~1', '--name-only'], repoPath).catch(() => '');
-        if (changed && changed.trim()) {
-          const codeFiles = changed.split('\n')
-            .filter(f => f && (f.endsWith('.cs') || f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.java') || f.endsWith('.py') || f.endsWith('.html') || f.endsWith('.css') || f.endsWith('.scss') || f.endsWith('.jsx') || f.endsWith('.tsx') || f.endsWith('.vue')) && !f.includes('..') && !f.includes('.env'))
-            .slice(0, 8);
-
-          for (const f of codeFiles) {
-            const content = await gitExec(['show', `HEAD:${f}`], repoPath).catch(() => '');
-            if (content && content.trim()) {
-              const lines = content.split('\n').length;
-              const ext = f.split('.').pop().toLowerCase();
-              const langInfo = {
-                'cs': { name: 'C#', type: 'backend' }, 'java': { name: 'Java', type: 'backend' },
-                'py': { name: 'Python', type: 'backend' }, 'go': { name: 'Go', type: 'backend' },
-                'rb': { name: 'Ruby', type: 'backend' }, 'php': { name: 'PHP', type: 'backend' },
-                'js': { name: 'JavaScript', type: 'backend' }, 'ts': { name: 'TypeScript', type: 'backend' },
-                'html': { name: 'HTML', type: 'frontend' }, 'css': { name: 'CSS', type: 'frontend' },
-                'scss': { name: 'SCSS', type: 'frontend' },
-                'jsx': { name: 'React JSX', type: 'frontend' }, 'tsx': { name: 'React TSX', type: 'frontend' },
-                'vue': { name: 'Vue', type: 'frontend' }
-              }[ext] || { name: 'Unknown', type: 'backend' };
-
-              const langType = langInfo.type;
-              languagesDetected[langType][langInfo.name] = (languagesDetected[langType][langInfo.name] || 0) + 1;
-              totalCodeLines += lines;
-              analyzedFiles.push({ file: f, lines, language: langInfo.name, type: langType });
-              codeSnippet += `\n\n// FILE: ${f}\n${content.substring(0, 3000)}`;
-            }
-          }
-        }
-      } catch (_) {}
-
-      // Strategy 2: If no git changes found, scan repository directly
-      if (!codeSnippet && fs.existsSync(repoPath)) {
-        log('📂 Scanning repository files...');
-        try {
-          const allFiles = scanDirectory(repoPath);
-          const filesToAnalyze = allFiles.slice(0, 5); // Limit to 5 files
-
-          for (const fileInfo of filesToAnalyze) {
-            try {
-              const content = fs.readFileSync(fileInfo.path, 'utf8');
-              if (content && content.trim()) {
-                const lines = content.split('\n').length;
-                const lang = fileInfo.language || 'Unknown';
-                const langType = fileInfo.type || 'backend';
-                languagesDetected[langType][lang] = (languagesDetected[langType][lang] || 0) + 1;
-                totalCodeLines += lines;
-                analyzedFiles.push({ file: fileInfo.relative, lines, language: lang, type: langType });
-                codeSnippet += `\n\n// FILE: ${fileInfo.relative}\n${content.substring(0, 3000)}`;
-              }
-            } catch (_) {}
-          }
-
-          log(`✅ Found ${filesToAnalyze.length} files to analyze`);
-        } catch (_) {}
-      }
-
-      // Strategy 3: Demo snippet if still no code found
-      if (!codeSnippet) {
-        log('⚠️ No code files found — using demo snippet with intentional security issues');
-        codeSnippet = `// Demo.cs
-public class UserService {
-  private string apiKey = "sk-prod-1234567890abcdef"; // Hardcoded API key
-  private string dbConn = "Server=prod.db.com;Database=main;User=admin;Password=Admin123!;";
-
-  public User GetUser(int id) {
-    var sql = "SELECT * FROM Users WHERE Id=" + id; // SQL injection risk!
-    return db.Query<User>(sql).First();
-  }
-
-  public void SendEmail(string token) {
-    var githubToken = "ghp_aB3dEf7H9jK1mN4pQ6rS8tU0vW2xY5zA"; // GitHub token
-    // AWS credentials hardcoded
-    var awsKey = "AKIAIOSFODNN7EXAMPLE";
-    var awsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
-  }
-}
-
-// index.html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Demo App</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <h1>Welcome</h1>
-  <script>
-    var token = "admin_token_123"; // Hardcoded token
-  </script>
-</body>
-</html>
-
-/* style.css */
-body {
-  background: #fff;
-  font-family: Arial;
-}`;
-        totalCodeLines = 37;
-        analyzedFiles = [
-          { file: 'Demo.cs', lines: 15, language: 'C#', type: 'backend' },
-          { file: 'index.html', lines: 12, language: 'HTML', type: 'frontend' },
-          { file: 'style.css', lines: 4, language: 'CSS', type: 'frontend' }
-        ];
-        languagesDetected.backend['C#'] = 1;
-        languagesDetected.frontend['HTML'] = 1;
-        languagesDetected.frontend['CSS'] = 1;
-      }
-
-      log(`📊 Total Code Lines: ${totalCodeLines} (${analyzedFiles.length} files)`);
-
-      log('🧠 Calling Claude AI...');
+      log('🧠 Calling Claude AI — analyzing SonarQube findings (no source code sent)...');
       const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -650,218 +592,137 @@ body {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-5', max_tokens: 4000, temperature: 0.2,
-          system: `You are a senior code security and quality analyst. Analyze code deeply and return ONLY valid JSON (no markdown, no explanations):
+          system: `You are a senior code security and quality analyst. You will be given a JSON summary of SonarQube static-analysis findings for a repository — NOT source code, only issue metadata (rule, file, line, message, severity, type) and aggregate metrics. Analyze and prioritize these findings and return ONLY valid JSON (no markdown, no explanations):
 
 {
-  "summary": "Brief overall assessment",
-  "score": number (0-100),
-  "linesOfCode": number,
-  "totalCodeLines": number,
-  "files": ["list of analyzed files"],
-  "secretsFound": {
-    "detected": boolean,
-    "count": number,
-    "secrets": [
-      {
-        "type": "API Key|Password|Token|Private Key|AWS Key|Database Credential",
-        "file": "filename",
-        "line": number,
-        "severity": "critical|high|medium",
-        "pattern": "masked secret (e.g., ghp_****)",
-        "description": "what was found"
-      }
-    ]
-  },
-  "syntaxCheck": {
-    "passed": boolean,
-    "totalErrors": number,
-    "errors": [
-      {
-        "file": "filename",
-        "line": number,
-        "column": number,
-        "severity": "error|warning",
-        "message": "syntax error description",
-        "suggestion": "how to fix it"
-      }
-    ]
-  },
+  "summary": "Brief overall assessment based on the findings",
+  "score": number (0-100, derived from severity/volume of findings),
   "issues": [
     {
       "severity": "critical|major|minor",
-      "category": "security|quality|performance|maintainability",
+      "category": "security|quality|performance|maintainability|secrets",
       "file": "filename",
       "line": number or null,
       "title": "Short title",
-      "description": "Detailed description",
+      "description": "Explanation grounded in the given Sonar finding — do not invent details not implied by it",
       "fix": "How to fix it",
       "cwe": "CWE-xxx (if security issue)" or null
     }
   ],
-  "security": {
-    "rating": "A|B|C|D|E",
-    "score": number (0-100),
-    "findings": ["specific findings"],
-    "vulnerabilities": [
-      {
-        "type": "SQL Injection|XSS|Hardcoded Secret|etc",
-        "severity": "critical|high|medium|low",
-        "location": "file:line",
-        "description": "what was found"
-      }
-    ]
-  },
-  "maintainability": {
-    "rating": "A|B|C|D|E",
-    "score": number (0-100),
-    "findings": ["specific findings"],
-    "codeSmells": [
-      {
-        "type": "Duplicate Code|Long Method|God Class|etc",
-        "location": "file:line",
-        "description": "what needs improvement"
-      }
-    ]
-  },
-  "performance": {
-    "rating": "A|B|C|D|E",
-    "score": number (0-100),
-    "findings": ["specific findings"],
-    "bottlenecks": [
-      {
-        "type": "N+1 Query|Memory Leak|Inefficient Loop|etc",
-        "location": "file:line",
-        "impact": "description"
-      }
-    ]
-  },
-  "duplications": {
-    "percentage": number (0-100),
-    "blocks": number,
-    "lines": number,
-    "details": [
-      {
-        "files": ["file1", "file2"],
-        "lines": "approximate line range",
-        "snippet": "first 100 chars of duplicate"
-      }
-    ]
-  },
-  "complexity": {
-    "average": number,
-    "highest": {"file": "name", "function": "name", "score": number},
-    "concerns": ["functions/classes with high complexity"]
-  },
+  "security": { "rating": "A|B|C|D|E", "score": number (0-100), "findings": ["specific findings"], "vulnerabilities": [{"type":"...","severity":"critical|high|medium|low","location":"file:line","description":"..."}] },
+  "maintainability": { "rating": "A|B|C|D|E", "score": number (0-100), "findings": ["specific findings"], "codeSmells": [{"type":"...","location":"file:line","description":"..."}] },
+  "performance": { "rating": "A|B|C|D|E", "score": number (0-100), "findings": ["specific findings"], "bottlenecks": [{"type":"...","location":"file:line","impact":"..."}] },
   "recommendations": ["actionable improvements in priority order"],
-  "metrics": {
-    "totalIssues": number,
-    "critical": number,
-    "major": number,
-    "minor": number,
-    "technicalDebt": "estimated time to fix (e.g., 2h, 1d)"
-  }
+  "metrics": { "totalIssues": number, "critical": number, "major": number, "minor": number, "technicalDebt": "estimated time to fix (e.g., 2h, 1d)" }
 }
 
 IMPORTANT:
-- Be thorough - check for OWASP Top 10 vulnerabilities
-- Identify code duplications and similar patterns
-- Calculate cyclomatic complexity where possible
-- SCAN FOR SECRETS: Look for hardcoded secrets, passwords, API keys, tokens, private keys, AWS keys, database credentials
-- For secret scanning: Check patterns like "password=", "api_key=", "token=", "secret=", hardcoded connection strings
-- Ignore .env files for secret scanning (they are configuration files)
-- If NO secrets found, set secretsFound.detected to false and secrets array to empty
-- SYNTAX CHECK: Analyze code for syntax errors (missing brackets, semicolons, wrong syntax, typos in keywords)
-- Check for: unclosed brackets, missing semicolons, invalid variable names, wrong function syntax, typos in language keywords
-- If syntax is OK, set syntaxCheck.passed to true and errors array to empty
-- If syntax errors found, provide line number, error message, and suggestion to fix
-- Check for SQL injection, XSS, insecure deserialization
-- Identify performance issues like N+1 queries, memory leaks
-- Flag code smells like long methods, god classes, duplicate code
-- Count total lines of code analyzed
-- Provide specific line numbers when possible`,
-          messages: [{ role: 'user', content: `Perform comprehensive code review for branch "${branch}" in repository "${repoName}".
+- Base every issue strictly on the provided Sonar findings — never fabricate file/line references.
+- Any finding whose rule starts with "secrets:" (already flagged for you in a separate list) MUST also appear in "issues" with category "secrets" and severity "critical".
+- Never output an actual secret/credential value — the input data never contains one, only rule/file/line/message.
+- Ratings should reflect the real proportion of BLOCKER/CRITICAL vs MINOR findings.`,
+          messages: [{ role: 'user', content: `Repository: ${repoName} • Branch: ${branch}
+Total lines of code (SonarQube ncloc): ${totalCodeLines}
+Total SonarQube issues: ${sonarReport.totalIssues}
+Metrics: bugs=${sonarReport.metrics.bugs || 0}, vulnerabilities=${sonarReport.metrics.vulnerabilities || 0}, code_smells=${sonarReport.metrics.code_smells || 0}, security_hotspots=${sonarReport.metrics.security_hotspots || 0}, reliability_rating=${sonarReport.metrics.reliability_rating || '—'}, security_rating=${sonarReport.metrics.security_rating || '—'}, sqale_rating=${sonarReport.metrics.sqale_rating || '—'}
 
-Total Code Lines: ${totalCodeLines}
-Analyzed Files: ${analyzedFiles.map(f => `${f.file} (${f.lines} lines)`).join(', ')}
+Known hardcoded-credential findings (already detected by SonarQube's secrets rules — surface these prominently):
+${JSON.stringify(secretIssues.map(s => ({ file: s.file, line: s.line, rule: s.rule, message: s.description })), null, 2)}
 
-Analyze for:
-1. SYNTAX CHECK - Check for syntax errors, missing brackets, semicolons, typos in keywords, invalid syntax
-2. Security vulnerabilities (OWASP Top 10)
-3. SECRETS SCANNING - Check for hardcoded passwords, API keys, tokens, credentials (EXCLUDE .env files)
-4. Code quality issues
-5. Performance bottlenecks
-6. Code duplications
-7. Maintainability concerns
-8. Cyclomatic complexity
-
-Code to analyze:
-${codeSnippet}` }]
+Full SonarQube issue list (metadata only, no source code):
+${JSON.stringify(sonarIssues, null, 2)}` }]
         })
       });
 
       const aiData = await aiRes.json();
-      const raw    = aiData.content?.[0]?.text || '{}';
+      if (!aiRes.ok || aiData.error) {
+        const apiErrMsg = aiData.error?.message || `Anthropic API returned ${aiRes.status}`;
+        log(`❌ Claude AI call failed: ${apiErrMsg}`);
+        return socket.emit('review-result', { success: false, error: `AI analysis failed: ${safeError({ message: apiErrMsg })}` });
+      }
+      const raw = aiData.content?.[0]?.text || '{}';
       let review;
       try {
         review = JSON.parse(raw.replace(/```json|```/g, '').trim());
       } catch {
         review = {
-          summary: 'Review complete (parse error)', score: 75, linesOfCode: 0, totalCodeLines: totalCodeLines, files: [],
-          secretsFound: { detected: false, count: 0, secrets: [] },
-          issues: [], security: { rating: 'B', score: 75, findings: [], vulnerabilities: [] },
+          summary: 'Review complete (parse error)', score: 75, issues: [],
+          security: { rating: 'B', score: 75, findings: [], vulnerabilities: [] },
           maintainability: { rating: 'B', score: 75, findings: [], codeSmells: [] },
           performance: { rating: 'B', score: 75, findings: [], bottlenecks: [] },
-          duplications: { percentage: 0, blocks: 0, lines: 0, details: [] },
-          complexity: { average: 5, highest: null, concerns: [] },
           recommendations: [],
           metrics: { totalIssues: 0, critical: 0, major: 0, minor: 0, technicalDebt: '0h' }
         };
       }
 
-      // Ensure secretsFound exists (for backward compatibility)
-      if (!review.secretsFound) {
-        review.secretsFound = { detected: false, count: 0, secrets: [] };
+      // Deterministic safety net — force the secrets block from Sonar's own
+      // classification rather than trusting the AI's judgment for this.
+      review.secretsFound = {
+        detected: secretIssues.length > 0,
+        count:    secretIssues.length,
+        secrets:  secretIssues
+      };
+      // Merge deterministic secret issues into the issues list if the AI missed any.
+      const existingSecretKeys = new Set((review.issues || []).filter(i => i.category === 'secrets').map(i => `${i.file}:${i.line}`));
+      for (const s of secretIssues) {
+        const k = `${s.file}:${s.line}`;
+        if (!existingSecretKeys.has(k)) {
+          (review.issues = review.issues || []).push({
+            severity: 'critical', category: 'secrets', file: s.file, line: s.line,
+            title: `🔐 ${s.type} Detected`, description: s.description,
+            fix: 'Move this credential to environment variables (.env) and rotate it immediately if it was ever committed.',
+            cwe: 'CWE-798'
+          });
+        }
       }
 
-      // Ensure syntaxCheck exists
-      if (!review.syntaxCheck) {
-        review.syntaxCheck = { passed: true, totalErrors: 0, errors: [] };
-      }
+      // Redact defensively across every text field before this ever leaves the server.
+      (review.issues || []).forEach(i => { i.description = redactSecrets(i.description); i.title = redactSecrets(i.title); });
+      review.summary = redactSecrets(review.summary || '');
 
-      // FORCE SET totalCodeLines from actual scan (don't trust AI response)
+      // FORCE SET totals from Sonar's own measures (don't trust AI response).
       review.totalCodeLines = totalCodeLines;
-      review.linesOfCode = totalCodeLines;
+      review.linesOfCode    = totalCodeLines;
+      review.metrics = review.metrics || {};
+      review.metrics.totalIssues = sonarReport.totalIssues;
+      review.metrics.critical    = (review.issues || []).filter(i => i.severity === 'critical').length;
+      review.metrics.major       = (review.issues || []).filter(i => i.severity === 'major').length;
+      review.metrics.minor       = (review.issues || []).filter(i => i.severity === 'minor').length;
 
-      // Add programming languages detected (backend/frontend separate)
-      review.languagesDetected = languagesDetected;
-      const allLangs = { ...languagesDetected.backend, ...languagesDetected.frontend };
-      review.primaryLanguage = Object.keys(allLangs).sort((a,b) => allLangs[b] - allLangs[a])[0] || 'Unknown';
+      // Local, content-free language detection (filenames only).
+      const repoPath = getRepoPath(repoName);
+      review.languagesDetected = fs.existsSync(repoPath) ? scanLanguages(repoPath) : { backend: {}, frontend: {} };
+      const allLangs = { ...review.languagesDetected.backend, ...review.languagesDetected.frontend };
+      review.primaryLanguage = Object.keys(allLangs).sort((a, b) => allLangs[b] - allLangs[a])[0] || 'Unknown';
+      review.files = sonarIssues.reduce((acc, i) => (i.file && !acc.includes(i.file) ? [...acc, i.file] : acc), []);
+      review.sonarProjectKey = projectKey;
 
-      // Add analyzed files info
-      if (!review.files || review.files.length === 0) {
-        review.files = analyzedFiles.map(f => f.file);
-      }
+      log(`✅ AI analysis complete — Score: ${review.score ?? '—'}/100${secretIssues.length ? ` • 🔐 ${secretIssues.length} secret(s) flagged` : ''}`);
 
-      log(`✅ Review complete: ${totalCodeLines} lines analyzed from ${analyzedFiles.length} files`);
+      // Persist for the "AI Reports" dashboard section.
+      saveAiReport({
+        projectKey, repoName, branch,
+        timestamp:    new Date().toISOString(),
+        score:        review.score ?? 0,
+        totalIssues:  review.metrics.totalIssues,
+        secretsCount: secretIssues.length,
+        review
+      });
 
-      socket.emit('review-result', { success: true, branch, repoName, review });
-      log(`✅ Done — Score: ${review.score ?? '—'}/100`);
+      socket.emit('review-result', { success: true, branch, repoName, projectKey, review });
 
-      // Generate and send AI Review Report email
-      log('📧 Generating AI Review Report...');
+      // Single consolidated notification — the "Notify" step of the flow.
+      log('📧 Sending AI Review notification...');
       try {
         const reportHTML = generateAIReviewReport(review, repoName, branch);
-        const score = review.score || 75;
-        const scoreEmoji = score >= 80 ? '🎉' : score >= 60 ? '⚠️' : '🚨';
-        const bugs = (review.issues || []).filter(i => i.category === 'security' || i.severity === 'critical').length;
-        const smells = (review.issues || []).filter(i => i.category === 'quality' || i.category === 'maintainability').length;
-
+        const score = review.score || 0;
+        const scoreEmoji = secretIssues.length ? '🔐' : score >= 80 ? '🎉' : score >= 60 ? '⚠️' : '🚨';
         await sendEmail({
           to: NOTIFY_EMAIL,
-          subject: `${scoreEmoji} AI Code Review Complete • ${repoName} (${branch}) • Score: ${score}/100`,
+          subject: `${scoreEmoji} AI Review (SonarQube-based) • ${repoName} (${branch}) • Score: ${score}/100${secretIssues.length ? ` • ${secretIssues.length} secret(s) found` : ''}`,
           html: reportHTML
         });
-        log('✅ AI Review Report sent via email');
+        log('✅ Notification sent');
       } catch (emailErr) {
         log(`⚠️ Email sending failed: ${safeError(emailErr)}`);
       }
@@ -869,6 +730,24 @@ ${codeSnippet}` }]
       log(`❌ ${safeError(e)}`);
       socket.emit('review-result', { success: false, error: safeError(e) });
     }
+  });
+
+  // ── 4b. AI REPORTS — list & fetch persisted reports for the dashboard ───────
+  socket.on('fetch-ai-reports', () => {
+    const reports = loadAiReports().map(r => ({
+      projectKey: r.projectKey, repoName: r.repoName, branch: r.branch,
+      timestamp: r.timestamp, score: r.score, totalIssues: r.totalIssues, secretsCount: r.secretsCount
+    }));
+    socket.emit('ai-reports', { success: true, reports });
+  });
+
+  socket.on('fetch-ai-report', ({ projectKey }) => {
+    if (typeof projectKey !== 'string' || /[^a-zA-Z0-9_\-\.]/.test(projectKey)) {
+      return socket.emit('ai-report-detail', { success: false, error: 'Invalid project key' });
+    }
+    const found = loadAiReports().find(r => r.projectKey === projectKey);
+    if (!found) return socket.emit('ai-report-detail', { success: false, error: 'Report not found' });
+    socket.emit('ai-report-detail', { success: true, repoName: found.repoName, branch: found.branch, review: found.review });
   });
 
   // ── 5. SONARQUBE SCAN ──────────────────────────────────────────────────────
@@ -917,6 +796,10 @@ ${codeSnippet}` }]
       }
     } catch (_) {}
 
+    // Local, content-free language tally (filenames only) for the dashboard's
+    // Programming Languages card — never sent anywhere, just displayed.
+    const languagesDetected = scanLanguages(repoPath);
+
     log('step', `🔍 Sonar Scan — ${repoName}@${branch}`);
     log('info',  `📁 ${repoPath}`);
     log('info',  `🔑 Project Key: ${projectKey}`);
@@ -939,7 +822,7 @@ ${codeSnippet}` }]
           `/d:sonar.token="${SONAR_TOKEN}"`,
           `/d:sonar.branch.name="${branch}"`,
           `/d:sonar.cs.opencover.reportsPaths=**\\coverage.opencover.xml`,
-          `/d:sonar.exclusions=**/node_modules/**,**/.git/**,**/bin/**,**/obj/**`
+          `/d:sonar.exclusions=**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.env,**/.env.*`
         ].join(' ');
         await runCommand(beginCmd, repoPath, socket, 'scan-log');
         log('success', '✅ Begin done');
@@ -978,7 +861,7 @@ sonar.projectName=${displayName}
 sonar.projectVersion=1.0
 sonar.sources=.
 sonar.sourceEncoding=UTF-8
-sonar.exclusions=node_modules/**,coverage/**,dist/**,build/**,.git/**,.claude/**,.wolf/**,**/*.test.js,**/*.spec.js
+sonar.exclusions=node_modules/**,coverage/**,dist/**,build/**,.git/**,.claude/**,.wolf/**,data/**,**/*.test.js,**/*.spec.js,**/.env,**/.env.*
 sonar.javascript.file.suffixes=.js,.jsx
 sonar.typescript.file.suffixes=.ts,.tsx
 sonar.host.url=${SONAR_URL}
@@ -1076,151 +959,10 @@ sonar.token=${SONAR_TOKEN}`;
       await new Promise(r => setTimeout(r, 15000));
 
       const report = await fetchSonarReport(projectKey);
-      socket.emit('scan-complete', { success: true, branch, repoName, projectKey, report });
+      socket.emit('scan-complete', { success: true, branch, repoName, projectKey, report, languagesDetected });
       log('success', `✅ Scan complete — ${report.totalIssues} issues found`);
       log('info',    `📊 View: ${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}`);
-
-      // Send SonarQube scan report email
-      log('info', '📧 Sending SonarQube scan report email...');
-      try {
-        await sendEmail({
-          to: NOTIFY_EMAIL,
-          subject: `✅ Code Quality Scan Complete • ${repoName} (${branch}) • ${report.totalIssues} issues detected`,
-        html: `
-<!DOCTYPE html>
-<html>
-<head><style>
-body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f4f7fa;padding:20px;margin:0}
-.container{max-width:650px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12)}
-.header{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:36px 28px;text-align:center}
-.header h1{margin:0;font-size:24px;font-weight:700}
-.header p{margin:8px 0 0;opacity:0.95;font-size:14px}
-.content{padding:32px 28px;color:#1f2937}
-.section{margin-bottom:28px}
-.section h3{margin:0 0 16px;color:#111827;font-size:16px;font-weight:600;border-bottom:2px solid #e5e7eb;padding-bottom:8px}
-.info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6}
-.info-label{color:#6b7280;font-size:13px;font-weight:500}
-.info-value{color:#111827;font-size:13px;font-weight:600;font-family:'Courier New',monospace}
-.metrics{display:flex;justify-content:space-around;margin:24px 0;padding:24px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb}
-.metric{text-align:center;flex:1}
-.metric-value{font-size:36px;font-weight:700;margin-bottom:6px;font-family:'Courier New',monospace}
-.metric-value.bugs{color:#ef4444}
-.metric-value.vulnerabilities{color:#f59e0b}
-.metric-value.smells{color:#3b82f6}
-.metric-label{font-size:12px;color:#6b7280;text-transform:uppercase;font-weight:600;letter-spacing:0.5px}
-.rating-box{display:inline-block;padding:20px 24px;background:#f9fafb;border-radius:10px;margin:8px;border:1px solid #e5e7eb;text-align:center}
-.rating-value{font-size:28px;font-weight:700;margin-bottom:6px;font-family:'Courier New',monospace}
-.rating-label{font-size:12px;color:#6b7280;font-weight:500}
-.footer{padding:24px 28px;background:#f9fafb;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
-.btn{display:inline-block;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;margin:20px 0;font-weight:600;font-size:14px;box-shadow:0 4px 12px rgba(16,185,129,0.3)}
-.highlight{background:#fef3c7;padding:16px;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#92400e;margin:16px 0}
-.timestamp{color:#9ca3af;font-size:11px;font-style:italic}
-.rating-A{color:#065f46;background:#d1fae5;border:2px solid #10b981}
-.rating-B{color:#1e40af;background:#dbeafe;border:2px solid #3b82f6}
-.rating-C{color:#92400e;background:#fef3c7;border:2px solid #f59e0b}
-.rating-D{color:#991b1b;background:#fee2e2;border:2px solid #ef4444}
-</style></head>
-<body>
-<div class="container">
-  <div class="header">
-    <h1>✅ SonarQube Scan Completed Successfully</h1>
-    <p>Automated Security & Quality Analysis Report</p>
-  </div>
-  <div class="content">
-    <div class="section">
-      <h3>📋 Scan Summary</h3>
-      <div class="info-row">
-        <span class="info-label">Repository</span>
-        <span class="info-value">${repoName}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Branch</span>
-        <span class="info-value">${branch}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Scan Timestamp</span>
-        <span class="info-value timestamp">${new Date().toLocaleString('en-IN', {dateStyle:'medium',timeStyle:'short'})}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Project Key</span>
-        <span class="info-value">${projectKey}</span>
-      </div>
-    </div>
-
-    <div class="highlight">
-      <strong>🔍 Total Issues Detected:</strong> ${report.totalIssues} issues require attention. Review the detailed breakdown below and prioritize critical vulnerabilities first.
-    </div>
-
-    <div class="section">
-      <h3>📊 Issue Breakdown</h3>
-      <div class="metrics">
-        <div class="metric">
-          <div class="metric-value bugs">${report.metrics.bugs||0}</div>
-          <div class="metric-label">Bugs</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value vulnerabilities">${report.metrics.vulnerabilities||0}</div>
-          <div class="metric-label">Vulnerabilities</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value smells">${report.metrics.code_smells||0}</div>
-          <div class="metric-label">Code Smells</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h3>⭐ Quality Ratings</h3>
-      <div style="text-align:center">
-        <div class="rating-box rating-${report.metrics.reliability_rating||'A'}">
-          <div class="rating-value">${report.metrics.reliability_rating||'A'}</div>
-          <div class="rating-label">Reliability</div>
-        </div>
-        <div class="rating-box rating-${report.metrics.security_rating||'A'}">
-          <div class="rating-value">${report.metrics.security_rating||'A'}</div>
-          <div class="rating-label">Security</div>
-        </div>
-        <div class="rating-box rating-${report.metrics.sqale_rating||'A'}">
-          <div class="rating-value">${report.metrics.sqale_rating||'A'}</div>
-          <div class="rating-label">Maintainability</div>
-        </div>
-      </div>
-    </div>
-
-    ${report.metrics.coverage ? `
-    <div class="section">
-      <h3>📈 Code Coverage</h3>
-      <div style="background:#f3f4f6;border-radius:12px;height:32px;overflow:hidden;border:1px solid #e5e7eb">
-        <div style="background:linear-gradient(90deg,#10b981,#059669);height:100%;width:${report.metrics.coverage}%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-size:14px;transition:width 0.3s">${parseFloat(report.metrics.coverage).toFixed(1)}%</div>
-      </div>
-    </div>` : ''}
-
-    <div style="text-align:center;margin-top:32px">
-      <a href="${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}" class="btn">📊 View Full Report in SonarQube →</a>
-    </div>
-
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin-top:24px;font-size:13px;color:#1e40af">
-      <strong>💡 Next Steps:</strong>
-      <ul style="margin:8px 0 0;padding-left:20px">
-        <li>Review high-severity vulnerabilities in the SonarQube dashboard</li>
-        <li>Address critical bugs before merging to production</li>
-        <li>Run AI code review for semantic analysis and recommendations</li>
-      </ul>
-    </div>
-  </div>
-  <div class="footer">
-    <p><strong>🤖 SonarAI Agent</strong> — Enterprise Code Quality & Security Platform<br>
-    Powered by Claude 4.5 Sonnet • SonarQube v26 • GitHub Integration<br>
-    <span style="font-size:10px;color:#9ca3af">Automated scan initiated at ${new Date().toLocaleString('en-IN')}</span></p>
-  </div>
-</div>
-</body>
-</html>`
-        });
-        log('success', '✅ SonarQube report email sent successfully');
-      } catch (emailErr) {
-        log('error', `⚠️ Email sending failed: ${safeError(emailErr)}`);
-      }
+      log('info',    `➡️  Next: run Level 1 (AI Review) — notification is sent once that finishes.`);
 
     } catch (e) {
       const errMsg = safeError(e);

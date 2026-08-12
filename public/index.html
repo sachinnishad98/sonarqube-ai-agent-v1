@@ -163,8 +163,8 @@
 
     <div class="nav-item active" onclick="showView('overview')" id="nav-overview"><i class="fa-solid fa-house" style="width:16px"></i> Overview</div>
     <div class="nav-item" onclick="showView('repos')" id="nav-repos"><i class="fa-solid fa-code-branch" style="width:16px"></i> Total Repositories</div>
+    <div class="nav-item" onclick="showView('ai-reports')" id="nav-ai-reports"><i class="fa-solid fa-shield-halved" style="width:16px"></i> AI Reports</div>
     <div class="nav-item disabled"><i class="fa-solid fa-infinity" style="width:16px"></i> Pipelines <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
-    <div class="nav-item disabled"><i class="fa-solid fa-chart-line" style="width:16px"></i> Analytics <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
     <div class="nav-item disabled"><i class="fa-solid fa-robot" style="width:16px"></i> AI Chat <span style="margin-left:auto;font-size:9px;background:var(--border);padding:2px 6px;border-radius:4px">SOON</span></div>
   </div>
 
@@ -209,18 +209,18 @@
         </div>
         <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin:0 4px;min-width:20px"></div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-robot" style="font-size:16px"></i></div>
-          <span style="font-size:11px;text-align:center;color:var(--text)">Level1(AI Review)</span>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-magnifying-glass-chart" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">SonarQube Scan</span>
         </div>
         <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent2),var(--accent));margin:0 4px;min-width:20px"></div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="fa-solid fa-magnifying-glass-chart" style="font-size:16px"></i></div>
-          <span style="font-size:11px;text-align:center;color:var(--text)">SonarQube Scan</span>
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="fa-solid fa-robot" style="font-size:16px"></i></div>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Level 1 (AI Review)</span>
         </div>
         <div style="flex:1;height:1px;background:linear-gradient(90deg,var(--accent),var(--accent2));margin:0 4px;min-width:20px"></div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px">
           <div style="width:40px;height:40px;border-radius:12px;background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent2)"><i class="fa-solid fa-envelope-circle-check" style="font-size:16px"></i></div>
-          <span style="font-size:11px;text-align:center;color:var(--text)">Report+Notify</span>
+          <span style="font-size:11px;text-align:center;color:var(--text)">Notify</span>
         </div>
       </div>
     </div>
@@ -291,6 +291,22 @@
       </div>
     </div>
 
+    <!-- AI REVIEW QUALITY SNAPSHOT -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px">
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AI REVIEWS RUN</div>
+        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace" id="ov-stat-total-scans">—</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AVG QUALITY SCORE</div>
+        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:var(--accent)" id="ov-stat-avg-score">—</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">SECRETS EVER FLAGGED</div>
+        <div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace" id="ov-stat-secrets-total">—</div>
+      </div>
+    </div>
+
     <!-- RECENT ACTIVITY -->
     <div class="stat-card" style="padding:20px;margin-top:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -342,6 +358,35 @@
     <div id="branches-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px"></div>
   </div>
 
+  <!-- AI REPORTS VIEW -->
+  <div id="view-ai-reports" class="fade-in hidden">
+    <div id="ai-reports-list-wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:22px;font-weight:700">Level 1 (AI Review) — SonarQube Reports</h2>
+          <p style="color:var(--muted);font-size:13px;margin-top:2px">Past AI reviews, generated entirely from SonarQube findings — never raw source</p>
+        </div>
+        <button class="btn-primary" onclick="loadAiReports()" id="refresh-ai-reports-btn"><i class="fa-solid fa-arrows-rotate"></i></button>
+      </div>
+      <div id="ai-reports-loading" style="text-align:center;padding:40px;color:var(--muted);display:none">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px"></i><br>Loading reports...
+      </div>
+      <div id="ai-reports-empty" style="display:none;text-align:center;padding:40px;color:var(--muted)">No AI reviews yet — run a SonarQube Scan, then Level 1 (AI Review), from a repo/branch.</div>
+      <div id="ai-reports-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px"></div>
+    </div>
+
+    <div id="ai-report-detail-wrap" class="hidden">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <button onclick="closeAiReportDetail()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--muted);cursor:pointer;font-size:12px"><i class="fa-solid fa-arrow-left"></i></button>
+        <div>
+          <h2 style="font-size:20px;font-weight:700" id="ai-report-detail-title">Report</h2>
+          <p style="color:var(--muted);font-size:12px" id="ai-report-detail-subtitle"></p>
+        </div>
+      </div>
+      <div id="ai-report-detail-content" style="max-width:800px"></div>
+    </div>
+  </div>
+
 </div><!-- /main-content -->
 
 <!-- RIGHT PANEL -->
@@ -357,8 +402,8 @@
   <!-- PANEL TABS -->
   <div style="display:flex;border-bottom:1px solid var(--border)">
     <button class="panel-tab active" onclick="switchTab('git')" id="tab-git" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text);border-bottom:2px solid var(--accent)"><i class="fa-brands fa-git-alt"></i> Git</button>
-    <button class="panel-tab" onclick="switchTab('review')" id="tab-review" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent"><i class="fa-solid fa-robot"></i> AI Review</button>
     <button class="panel-tab" onclick="switchTab('scan')" id="tab-scan" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent"><i class="fa-solid fa-shield-halved"></i> Sonar</button>
+    <button class="panel-tab" onclick="switchTab('review')" id="tab-review" style="flex:1;padding:10px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent"><i class="fa-solid fa-robot"></i> AI Review</button>
   </div>
 
   <div style="flex:1;overflow-y:auto">
@@ -374,19 +419,6 @@
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">OPERATION LOG</div>
       <div class="terminal" id="git-log"></div>
       <div id="git-result" style="display:none;margin-top:12px"></div>
-    </div>
-
-    <!-- REVIEW TAB -->
-    <div id="tab-content-review" style="padding:16px;display:none">
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">AI CODE REVIEW</div>
-        <button class="btn-primary btn-purple" onclick="doAiReview()" id="review-btn" style="width:100%;margin-bottom:8px">
-          <i class="fa-solid fa-robot"></i> Run AI Code Review
-        </button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">PROGRESS</div>
-      <div class="terminal" id="review-log" style="height:120px"></div>
-      <div id="review-result-section" style="display:none;margin-top:12px"></div>
     </div>
 
     <!-- SCAN TAB -->
@@ -423,6 +455,22 @@
       <div id="scan-result-section" style="display:none;margin-top:12px"></div>
     </div>
 
+    <!-- REVIEW TAB -->
+    <div id="tab-content-review" style="padding:16px;display:none">
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">LEVEL 1 (AI REVIEW) — BASED ON SONARQUBE REPORT</div>
+        <div id="review-gate-msg" style="display:none;background:rgba(0,0,0,.05);border:1px solid rgba(0,0,0,.15);border-radius:10px;padding:12px;margin-bottom:8px;font-size:12px;color:var(--muted)">
+          <i class="fa-solid fa-lock"></i> Run the SonarQube Scan first — AI Review analyzes the Sonar findings only, never your raw source code.
+        </div>
+        <button class="btn-primary btn-purple" onclick="doAiReview()" id="review-btn" style="width:100%;margin-bottom:8px" disabled>
+          <i class="fa-solid fa-robot"></i> Run AI Review
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">PROGRESS</div>
+      <div class="terminal" id="review-log" style="height:120px"></div>
+      <div id="review-result-section" style="display:none;margin-top:12px"></div>
+    </div>
+
   </div><!-- /panel scroll -->
 </div><!-- /right-panel -->
 
@@ -432,6 +480,7 @@
 const socket = io();
 let currentRepo = '';
 let currentBranch = '';
+let currentProjectKey = '';
 let allRepos = [];
 let allBranches = [];
 let scanStepState = [0, 0, 0];
@@ -461,28 +510,36 @@ setInterval(() => {
 
 // Socket connection
 socket.on('connect', () => {
-  document.getElementById('conn-dot').style.background = 'var(--success)';
+  document.getElementById('conn-dot').style.background = '#22c55e';
   document.getElementById('conn-text').textContent = 'Connected';
+  document.getElementById('conn-text').style.color = '#22c55e';
   loadRepos();
+  loadAiReports();
 });
 socket.on('disconnect', () => {
   document.getElementById('conn-dot').style.background = 'var(--danger)';
   document.getElementById('conn-text').textContent = 'Disconnected';
+  document.getElementById('conn-text').style.color = 'var(--muted)';
 });
 
 // ── VIEW MANAGEMENT ─────────────────────────────────────────────────────────
 function showView(name) {
-  ['overview','repos','branches'].forEach(v => {
+  ['overview','repos','branches','ai-reports'].forEach(v => {
     document.getElementById('view-' + v).classList.add('hidden');
     document.getElementById('nav-' + v)?.classList.remove('active');
   });
   document.getElementById('view-' + name).classList.remove('hidden');
   document.getElementById('nav-' + name)?.classList.add('active');
   if (name === 'repos' && allRepos.length === 0) loadRepos();
+  if (name === 'ai-reports') {
+    document.getElementById('ai-report-detail-wrap').classList.add('hidden');
+    document.getElementById('ai-reports-list-wrap').classList.remove('hidden');
+    loadAiReports();
+  }
 }
 
 function switchTab(tab) {
-  ['git','review','scan'].forEach(t => {
+  ['git','scan','review'].forEach(t => {
     document.getElementById('tab-content-' + t).style.display = t === tab ? 'block' : 'none';
     const tabEl = document.getElementById('tab-' + t);
     if (t === tab) { tabEl.style.color = 'var(--text)'; tabEl.style.borderBottomColor = 'var(--accent)'; }
@@ -493,6 +550,7 @@ function switchTab(tab) {
 function openPanel(repo, branch) {
   currentRepo = repo;
   currentBranch = branch;
+  currentProjectKey = '';
   document.getElementById('panel-title').textContent = branch;
   document.getElementById('panel-subtitle').textContent = repo;
   document.getElementById('scan-project-key').textContent = `Businessnext-${branch}-Branch`;
@@ -504,7 +562,18 @@ function openPanel(repo, branch) {
   document.getElementById('scan-log').innerHTML = '';
   document.getElementById('scan-result-section').style.display = 'none';
   resetScanSteps();
+  updateReviewGate();
   switchTab('git');
+}
+
+// AI Review is gated behind a completed SonarQube scan for this panel session
+// — it analyzes Sonar findings only, so it has nothing to run against until then.
+function updateReviewGate() {
+  const btn  = document.getElementById('review-btn');
+  const gate = document.getElementById('review-gate-msg');
+  const ready = !!currentProjectKey;
+  btn.disabled = !ready;
+  gate.style.display = ready ? 'none' : 'block';
 }
 
 function closePanel() {
@@ -635,21 +704,22 @@ socket.on('git-result', result => {
         <div>Author: <span style="color:var(--text)">${escHtml(commit.author || '—')}</span></div>
         <div style="grid-column:1/-1">Msg: <span style="color:var(--text)">${escHtml(commit.subject || '—')}</span></div>
       </div>
-      <button class="btn-primary" onclick="switchTab('review')" style="margin-top:10px;width:100%;font-size:12px"><i class="fa-solid fa-robot"></i> Next: AI Review →</button>
+      <button class="btn-primary" onclick="switchTab('scan')" style="margin-top:10px;width:100%;font-size:12px"><i class="fa-solid fa-shield-halved"></i> Next: SonarQube Scan →</button>
     </div>`;
   } else {
     el.innerHTML = `<div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:10px;padding:12px;font-size:12px;color:#f390ba">❌ ${escHtml(result.error || 'Unknown error')}</div>`;
   }
 });
 
-// ── AI REVIEW ────────────────────────────────────────────────────────────────
+// ── AI REVIEW — analyzes the SonarQube report only, never raw source ─────────
 function doAiReview() {
+  if (!currentProjectKey) { updateReviewGate(); return; }
   const btn = document.getElementById('review-btn');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reviewing...';
   document.getElementById('review-log').innerHTML = '';
   document.getElementById('review-result-section').style.display = 'none';
-  socket.emit('ai-review', { branch: currentBranch, repoName: currentRepo });
+  socket.emit('ai-review', { branch: currentBranch, repoName: currentRepo, projectKey: currentProjectKey });
 }
 
 socket.on('review-log', msg => {
@@ -664,7 +734,7 @@ socket.on('review-log', msg => {
 socket.on('review-result', ({ success, review, error }) => {
   const btn = document.getElementById('review-btn');
   btn.disabled = false;
-  btn.innerHTML = '<i class="fa-solid fa-robot"></i> Run AI Code Review';
+  btn.innerHTML = '<i class="fa-solid fa-robot"></i> Run AI Review';
   const el = document.getElementById('review-result-section');
   el.style.display = 'block';
 
@@ -672,7 +742,12 @@ socket.on('review-result', ({ success, review, error }) => {
     el.innerHTML = `<div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:10px;padding:12px;font-size:12px;color:#f390ba">❌ ${escHtml(error || 'Unknown error')}</div>`;
     return;
   }
+  el.innerHTML = buildReviewHTML(review);
+});
 
+// Builds the full AI Review report HTML from a `review` object — reused by
+// the live review-result handler above and by the AI Reports history view.
+function buildReviewHTML(review) {
   // Safe defaults
   const score    = (typeof review.score === 'number' && !isNaN(review.score)) ? review.score : 75;
   const summary  = review.summary || 'AI review complete.';
@@ -685,17 +760,53 @@ socket.on('review-result', ({ success, review, error }) => {
   const complex  = review.complexity || { average: 5, highest: null, concerns: [] };
 
   const scoreColor = score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)';
+  const secretsFound = review.secretsFound || { detected: false, count: 0, secrets: [] };
+  const hasSecrets = secretsFound.detected && secretsFound.secrets && secretsFound.secrets.length > 0;
 
-  el.innerHTML = `
+  return `
     <!-- ENHANCED AI REVIEW DASHBOARD -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;font-size:12px;max-height:600px;overflow-y:auto">
 
       <!-- AI POWERED BANNER -->
       <div style="background:linear-gradient(135deg,#111111,#e82276);border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;color:#fff">
-        <div style="font-size:14px;font-weight:700;margin-bottom:4px">🤖 AI-Powered Code Analysis</div>
-        <div style="font-size:11px;opacity:0.95">Analyzed by <strong>Claude Sonnet 4.5</strong> (Anthropic AI)</div>
-        <div style="font-size:10px;opacity:0.85;margin-top:2px">Deep semantic analysis • Security vulnerabilities • Code quality • Performance</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">🤖 Level 1 (AI Review) — SonarQube Report</div>
+        <div style="font-size:11px;opacity:0.95">Analyzed by <strong>Claude Sonnet 4.5</strong> from SonarQube findings only — no source code sent</div>
+        <div style="font-size:10px;opacity:0.85;margin-top:2px">Bugs • Vulnerabilities • Code Smells • Secrets/Credentials • Code Quality</div>
       </div>
+
+      <!-- SECRETS / CREDENTIALS — always shown first, highest priority -->
+      ${hasSecrets ? `
+        <div style="background:rgba(232,34,118,.08);border:2px solid #b81b5e;border-radius:12px;padding:14px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="font-size:20px">🔐</span>
+            <div style="font-size:13px;font-weight:700;color:#b81b5e">SECRETS / CREDENTIALS DETECTED — HIGH SEVERITY</div>
+            <div style="margin-left:auto;background:#b81b5e;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">${secretsFound.count} FOUND</div>
+          </div>
+          <div style="font-size:10px;color:#1a1a1a;margin-bottom:10px;font-weight:600">
+            ⚠️ SonarQube's secrets rules flagged hardcoded credentials. Values are never captured or displayed — only file, line, and rule.
+          </div>
+          ${secretsFound.secrets.slice(0, 8).map(secret => `
+            <div style="background:rgba(255,255,255,.9);border-left:4px solid #b81b5e;border-radius:6px;padding:10px;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span class="badge badge-critical">critical</span>
+                <span style="font-size:11px;font-weight:700;color:#1a1a1a">🔑 ${escHtml(secret.type || 'Credential')}</span>
+                ${secret.rule ? `<span style="font-size:9px;color:#6b6b6b;font-family:'Space Mono',monospace">${escHtml(secret.rule)}</span>` : ''}
+              </div>
+              <div style="font-size:10px;color:#6b6b6b;margin-bottom:4px">📍 ${escHtml(secret.file || 'Unknown')}${secret.line ? ':' + secret.line : ''} <span style="opacity:.7">(value masked — never captured)</span></div>
+              <div style="font-size:10px;color:#333333;margin-bottom:6px">${escHtml(secret.description || 'Hardcoded credential detected')}</div>
+              <div style="background:rgba(0,0,0,.1);border:1px solid rgba(0,0,0,.3);border-radius:6px;padding:8px;margin-top:6px">
+                <div style="font-size:9px;font-weight:700;color:#1a1a1a;margin-bottom:3px">💡 Recommended Fix:</div>
+                <div style="font-size:9px;color:#333333;line-height:1.4">Move this credential to environment variables (.env) and rotate it immediately if it was ever committed to version control.</div>
+              </div>
+            </div>
+          `).join('')}
+          ${secretsFound.count > 8 ? `<div style="text-align:center;font-size:10px;color:#1a1a1a;margin-top:8px">...and ${secretsFound.count - 8} more</div>` : ''}
+        </div>
+      ` : `
+        <div style="background:rgba(0,0,0,.08);border:2px solid #111111;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center">
+          <div style="font-size:12px;font-weight:700;color:#1a1a1a">✅ No secrets or hardcoded credentials detected by SonarQube</div>
+        </div>
+      `}
 
       <!-- AI SUGGESTIONS & FIXES (PRIORITY) -->
       ${issues.length > 0 ? `
@@ -879,144 +990,6 @@ socket.on('review-result', ({ success, review, error }) => {
         `;
       })()}
 
-      <!-- SYNTAX CHECK BLOCK -->
-      ${(() => {
-        const syntaxCheck = review.syntaxCheck || { passed: true, totalErrors: 0, errors: [] };
-        const hasSyntaxErrors = !syntaxCheck.passed && syntaxCheck.errors && syntaxCheck.errors.length > 0;
-
-        // Always show RED block by default, GREEN only if explicitly passed
-        if (hasSyntaxErrors) {
-          // SYNTAX ERRORS FOUND - Show red warning block
-          return `
-            <div style="background:rgba(232,34,118,.08);border:2px solid #e82276;border-radius:12px;padding:14px;margin-bottom:12px">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                <span style="font-size:20px">❌</span>
-                <div style="font-size:12px;font-weight:700;color:#e82276">SYNTAX CHECK</div>
-                <div style="margin-left:auto;background:#e82276;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
-                  ${syntaxCheck.totalErrors} ERROR${syntaxCheck.totalErrors > 1 ? 'S' : ''}
-                </div>
-              </div>
-              <div style="font-size:10px;color:#1a1a1a;margin-bottom:10px;font-weight:600">
-                ⚠️ Syntax errors detected in your code
-              </div>
-              ${syntaxCheck.errors.slice(0, 5).map(error => `
-                <div style="background:rgba(255,255,255,.9);border-left:4px solid #e82276;border-radius:6px;padding:10px;margin-bottom:8px">
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                    <span class="badge badge-${error.severity === 'error' ? 'critical' : 'major'}">${error.severity || 'error'}</span>
-                    <span style="font-size:10px;color:#6b6b6b">📍 ${escHtml(error.file || 'Unknown')}:${error.line || '?'}${error.column ? ':' + error.column : ''}</span>
-                  </div>
-                  <div style="font-size:11px;color:#1a1a1a;margin-bottom:6px;font-weight:600">${escHtml(error.message || 'Syntax error')}</div>
-                  ${error.suggestion ? `
-                    <div style="background:rgba(0,0,0,.1);border:1px solid rgba(0,0,0,.3);border-radius:6px;padding:8px;margin-top:6px">
-                      <div style="font-size:9px;font-weight:700;color:#1a1a1a;margin-bottom:3px">💡 Fix Suggestion:</div>
-                      <div style="font-size:9px;color:#333333;line-height:1.4">${escHtml(error.suggestion)}</div>
-                    </div>
-                  ` : ''}
-                </div>
-              `).join('')}
-              ${syntaxCheck.totalErrors > 5 ? `
-                <div style="text-align:center;font-size:10px;color:#1a1a1a;margin-top:8px">
-                  ...and ${syntaxCheck.totalErrors - 5} more syntax error(s)
-                </div>
-              ` : ''}
-            </div>
-          `;
-        } else {
-          // DEFAULT - Show RED block with "Checking..." or "OK"
-          return `
-            <div style="background:rgba(232,34,118,.08);border:2px solid #e82276;border-radius:12px;padding:14px;margin-bottom:12px">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <span style="font-size:20px">${syntaxCheck.passed ? '✅' : '⏳'}</span>
-                <div style="font-size:12px;font-weight:700;color:#e82276">SYNTAX CHECK</div>
-                <div style="margin-left:auto;background:#e82276;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
-                  ${syntaxCheck.passed ? 'OK' : 'CHECKING'}
-                </div>
-              </div>
-              <div style="text-align:center;padding:10px">
-                <div style="font-size:12px;font-weight:600;color:#e82276;margin-bottom:4px">
-                  ${syntaxCheck.passed ? '✅ Syntax OK' : '⏳ Checking syntax...'}
-                </div>
-                <div style="font-size:10px;color:#1a1a1a;line-height:1.5">
-                  ${syntaxCheck.passed ? 'No syntax errors detected in analyzed files.' : 'AI is analyzing your code for syntax errors...'}
-                </div>
-              </div>
-            </div>
-          `;
-        }
-      })()}
-
-      <!-- SECRETS/KEYS SCAN BLOCK -->
-      ${(() => {
-        const secretsFound = review.secretsFound || { detected: false, count: 0, secrets: [] };
-        const hasSecrets = secretsFound.detected && secretsFound.secrets && secretsFound.secrets.length > 0;
-
-        if (hasSecrets) {
-          // SECRETS FOUND - Show red warning block
-          return `
-            <div style="background:rgba(232,34,118,.08);border:2px solid #b81b5e;border-radius:12px;padding:14px;margin-bottom:12px">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                <span style="font-size:20px">🔐</span>
-                <div style="font-size:12px;font-weight:700;color:#b81b5e">SECRETS / KEYS DETECTED</div>
-                <div style="margin-left:auto;background:#b81b5e;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
-                  ${secretsFound.count} FOUND
-                </div>
-              </div>
-              <div style="font-size:10px;color:#1a1a1a;margin-bottom:10px;font-weight:600">
-                ⚠️ Warning: Hardcoded secrets detected in your code (.env files excluded from scan)
-              </div>
-              ${secretsFound.secrets.slice(0, 5).map(secret => `
-                <div style="background:rgba(255,255,255,.9);border-left:4px solid #b81b5e;border-radius:6px;padding:10px;margin-bottom:8px">
-                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                    <span class="badge badge-critical">${secret.severity || 'critical'}</span>
-                    <span style="font-size:11px;font-weight:700;color:#1a1a1a">🔑 ${escHtml(secret.type || 'Secret')}</span>
-                  </div>
-                  <div style="font-size:10px;color:#6b6b6b;margin-bottom:4px">📍 ${escHtml(secret.file || 'Unknown')}${secret.line ? ':' + secret.line : ''}</div>
-                  <div style="font-size:10px;color:#333333;margin-bottom:6px">${escHtml(secret.description || 'Hardcoded credential detected')}</div>
-                  ${secret.pattern ? `
-                    <div style="background:rgba(0,0,0,.05);border-radius:4px;padding:6px;font-family:monospace;font-size:9px;color:#333333;margin-bottom:6px;word-break:break-all">
-                      ${escHtml(secret.pattern)}
-                    </div>
-                  ` : ''}
-                  <div style="background:rgba(0,0,0,.1);border:1px solid rgba(0,0,0,.3);border-radius:6px;padding:8px;margin-top:6px">
-                    <div style="font-size:9px;font-weight:700;color:#1a1a1a;margin-bottom:3px">💡 Recommended Fix:</div>
-                    <div style="font-size:9px;color:#333333;line-height:1.4">
-                      Move this credential to environment variables (.env file) and use process.env to access it. Never commit secrets to version control.
-                    </div>
-                  </div>
-                </div>
-              `).join('')}
-              ${secretsFound.count > 5 ? `
-                <div style="text-align:center;font-size:10px;color:#1a1a1a;margin-top:8px">
-                  ...and ${secretsFound.count - 5} more secret(s) detected
-                </div>
-              ` : ''}
-            </div>
-          `;
-        } else {
-          // NO SECRETS - Show green success block
-          return `
-            <div style="background:rgba(0,0,0,.08);border:2px solid #111111;border-radius:12px;padding:14px;margin-bottom:12px">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <span style="font-size:20px">✅</span>
-                <div style="font-size:12px;font-weight:700;color:#1a1a1a">SECRETS / KEYS SCAN</div>
-                <div style="margin-left:auto;background:#111111;color:white;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">
-                  CLEAN
-                </div>
-              </div>
-              <div style="text-align:center;padding:12px">
-                <div style="font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:6px">
-                  ✅ No hardcoded secrets, passwords, or API keys detected
-                </div>
-                <div style="font-size:10px;color:#333333;line-height:1.5">
-                  Your code is secure! No sensitive credentials found in the scanned files.<br>
-                  <span style="font-size:9px;color:#6b6b6b">(.env files are excluded from scan)</span>
-                </div>
-              </div>
-            </div>
-          `;
-        }
-      })()}
-
       <!-- SECURITY VULNERABILITIES -->
       ${security.vulnerabilities && security.vulnerabilities.length > 0 ? `
         <div style="background:rgba(232,34,118,.05);border:1px solid rgba(232,34,118,.2);border-radius:8px;padding:10px;margin-bottom:12px">
@@ -1105,12 +1078,111 @@ socket.on('review-result', ({ success, review, error }) => {
         </div>
       ` : ''}
 
-      <!-- NEXT BUTTON -->
-      <button class="btn-primary btn-success" onclick="switchTab('scan')" style="width:100%;font-size:12px">
-        <i class="fa-solid fa-magnifying-glass-chart"></i> Next: SonarQube Scan →
-      </button>
+      <!-- NOTIFY -->
+      <div style="background:rgba(0,0,0,.06);border-radius:8px;padding:10px;text-align:center;font-size:11px;color:var(--muted)">
+        <i class="fa-solid fa-envelope"></i> Notification sent • saved to <a href="#" onclick="showView('ai-reports');return false" style="color:var(--accent);text-decoration:none;font-weight:600">AI Reports</a>
+      </div>
     </div>
   `;
+}
+
+// ── AI REPORTS (persisted history — "Level 1 (AI Review) – SonarQube Report") ─
+let allAiReports = [];
+
+// Populates the Overview page's quality-snapshot stats + recent activity list
+// from the same persisted AI reports data — no separate fetch needed.
+function renderOverviewFromReports(reports) {
+  const totalEl   = document.getElementById('ov-stat-total-scans');
+  const avgEl     = document.getElementById('ov-stat-avg-score');
+  const secretsEl = document.getElementById('ov-stat-secrets-total');
+  if (!totalEl) return; // Overview DOM not present yet
+
+  totalEl.textContent = reports.length;
+  const avgScore = reports.length ? Math.round(reports.reduce((s, r) => s + (r.score || 0), 0) / reports.length) : 0;
+  avgEl.textContent = reports.length ? avgScore : '—';
+  const totalSecrets = reports.reduce((s, r) => s + (r.secretsCount || 0), 0);
+  secretsEl.textContent = totalSecrets;
+  secretsEl.style.color = totalSecrets > 0 ? '#b81b5e' : 'var(--success)';
+
+  const listEl = document.getElementById('recent-activity-list');
+  const updateEl = document.getElementById('activity-last-update');
+  if (!reports.length) {
+    listEl.innerHTML = `<div style="padding:10px;background:var(--surface);border-radius:8px;text-align:center">Run your first scan to see activity logs here</div>`;
+    updateEl.textContent = 'No scans yet';
+    return;
+  }
+  updateEl.textContent = new Date(reports[0].timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  listEl.innerHTML = reports.slice(0, 5).map(r => {
+    const color = r.secretsCount > 0 ? '#b81b5e' : (r.score >= 80 ? 'var(--success)' : r.score >= 60 ? 'var(--warning)' : 'var(--danger)');
+    const when = new Date(r.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="showView('ai-reports');openAiReportDetail('${escHtml(r.projectKey)}')">
+      <div>
+        <div style="font-weight:600;color:var(--text)">${escHtml(r.repoName)} <span style="font-weight:400;color:var(--muted)">(${escHtml(r.branch)})</span></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${when}${r.secretsCount > 0 ? ` • 🔐 ${r.secretsCount} secret${r.secretsCount === 1 ? '' : 's'}` : ''}</div>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-weight:700;color:${color}">${r.score}</div>
+    </div>`;
+  }).join('');
+}
+
+function loadAiReports() {
+  document.getElementById('ai-reports-loading').style.display = 'block';
+  document.getElementById('ai-reports-empty').style.display = 'none';
+  document.getElementById('ai-reports-grid').innerHTML = '';
+  socket.emit('fetch-ai-reports');
+}
+
+socket.on('ai-reports', ({ success, reports }) => {
+  document.getElementById('ai-reports-loading').style.display = 'none';
+  allAiReports = reports || [];
+  renderOverviewFromReports(allAiReports);
+  const grid = document.getElementById('ai-reports-grid');
+  if (!allAiReports.length) {
+    document.getElementById('ai-reports-empty').style.display = 'block';
+    grid.innerHTML = '';
+    return;
+  }
+  grid.innerHTML = allAiReports.map(r => {
+    const scoreColor = r.secretsCount > 0 ? '#b81b5e' : (r.score >= 80 ? 'var(--success)' : r.score >= 60 ? 'var(--warning)' : 'var(--danger)');
+    const when = new Date(r.timestamp).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    return `
+    <div class="repo-card" onclick="openAiReportDetail('${escHtml(r.projectKey)}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div style="font-weight:600;font-size:14px">${escHtml(r.repoName)}</div>
+        <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:${scoreColor}">${r.score}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px"><i class="fa-solid fa-code-branch" style="margin-right:4px"></i>${escHtml(r.branch)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="badge badge-${r.totalIssues > 0 ? 'major' : 'minor'}">${r.totalIssues} issue${r.totalIssues === 1 ? '' : 's'}</span>
+        ${r.secretsCount > 0 ? `<span class="badge badge-critical">🔐 ${r.secretsCount} secret${r.secretsCount === 1 ? '' : 's'}</span>` : ''}
+      </div>
+      <div style="font-size:10px;color:var(--muted)">${when}</div>
+    </div>`;
+  }).join('');
+});
+
+function openAiReportDetail(projectKey) {
+  document.getElementById('ai-reports-list-wrap').classList.add('hidden');
+  document.getElementById('ai-report-detail-wrap').classList.remove('hidden');
+  document.getElementById('ai-report-detail-content').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px"></i></div>';
+  socket.emit('fetch-ai-report', { projectKey });
+}
+
+function closeAiReportDetail() {
+  document.getElementById('ai-report-detail-wrap').classList.add('hidden');
+  document.getElementById('ai-reports-list-wrap').classList.remove('hidden');
+}
+
+socket.on('ai-report-detail', ({ success, repoName, branch, review, error }) => {
+  const content = document.getElementById('ai-report-detail-content');
+  if (!success) {
+    content.innerHTML = `<div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:10px;padding:12px;font-size:12px;color:#f390ba">❌ ${escHtml(error || 'Report not found')}</div>`;
+    return;
+  }
+  document.getElementById('ai-report-detail-title').textContent = repoName;
+  document.getElementById('ai-report-detail-subtitle').textContent = branch;
+  content.innerHTML = buildReviewHTML(review);
 });
 
 // ── SONAR SCAN ───────────────────────────────────────────────────────────────
@@ -1188,6 +1260,9 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
     </div>`;
     return;
   }
+
+  currentProjectKey = projectKey;
+  updateReviewGate();
 
   const m = report?.metrics || {};
   // sonarUrl comes from server config API — not hardcoded in frontend
@@ -1299,129 +1374,9 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
       <div style="display:flex;gap:6px">
         <a href="${sonarLink}" target="_blank" style="flex:1;text-align:center;padding:8px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.2);border-radius:8px;color:var(--accent);text-decoration:none;font-size:11px"><i class="fa-solid fa-external-link"></i> View in SonarQube</a>
       </div>
-      <div style="margin-top:8px;font-size:11px;color:var(--success)"><i class="fa-solid fa-envelope"></i> Success email notification sent</div>
-
-      <!-- AI-POWERED FIX SUGGESTIONS FOR SONARQUBE ISSUES -->
-      ${(m.bugs||0) > 0 || (m.code_smells||0) > 0 || (m.vulnerabilities||0) > 0 ? `
-        <div id="ai-sonar-suggestions-${projectKey}" style="margin-top:16px">
-          <div style="background:linear-gradient(135deg,rgba(232,34,118,.1),rgba(232,34,118,.1));border:2px solid var(--accent);border-radius:12px;padding:16px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-              <i class="fa-solid fa-wand-magic-sparkles" style="font-size:18px;color:var(--accent)"></i>
-              <div style="font-size:14px;font-weight:700;color:var(--accent)">🤖 AI-Powered Fix Suggestions</div>
-            </div>
-            <div style="font-size:11px;color:var(--text);margin-bottom:12px;line-height:1.6">
-              SonarQube detected <strong>${m.bugs||0} Bugs</strong>, <strong>${m.vulnerabilities||0} Vulnerabilities</strong>, and <strong>${m.code_smells||0} Code Smells</strong>.
-              Claude Sonnet 4.5 will analyze your code and provide specific fix recommendations.
-            </div>
-            <button onclick="fetchAISonarSuggestions('${projectKey}', '${branch}', '${repoName}')" id="ai-suggest-btn-${projectKey}"
-              style="width:100%;background:linear-gradient(135deg,#e82276,#b81b5e);color:#fff;font-weight:600;border:none;border-radius:10px;padding:12px;cursor:pointer;font-size:13px">
-              <i class="fa-solid fa-sparkles"></i> Get AI-Powered Fix Suggestions from Claude
-            </button>
-            <div id="ai-suggest-result-${projectKey}" style="margin-top:12px"></div>
-          </div>
-        </div>
-      ` : ''}
+      <button class="btn-primary btn-purple" onclick="switchTab('review')" style="margin-top:8px;width:100%;font-size:12px"><i class="fa-solid fa-robot"></i> Next: AI Review →</button>
     </div>`;
 });
-
-// ── FETCH AI SUGGESTIONS FOR SONARQUBE ISSUES ────────────────────────────────
-function fetchAISonarSuggestions(projectKey, branch, repoName) {
-  const btn = document.getElementById(`ai-suggest-btn-${projectKey}`);
-  const resultDiv = document.getElementById(`ai-suggest-result-${projectKey}`);
-
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing with Claude AI...';
-
-  resultDiv.innerHTML = `
-    <div style="background:var(--surface);border-radius:8px;padding:12px;font-size:11px;color:var(--muted);text-align:center">
-      <i class="fa-solid fa-brain" style="font-size:16px;color:var(--accent);margin-bottom:6px;display:block"></i>
-      Claude Sonnet 4.5 is analyzing your code for specific fix recommendations...
-    </div>
-  `;
-
-  // Trigger AI review
-  socket.emit('ai-review', { branch, repoName });
-
-  // Listen for result
-  const reviewHandler = ({ success, review, error }) => {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-sparkles"></i> Get AI-Powered Fix Suggestions from Claude';
-
-    if (!success) {
-      resultDiv.innerHTML = `
-        <div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:8px;padding:10px;font-size:11px;color:#f390ba">
-          ❌ ${escHtml(error || 'AI analysis failed')}
-        </div>
-      `;
-      socket.off('review-result', reviewHandler);
-      return;
-    }
-
-    const issues = Array.isArray(review.issues) ? review.issues : [];
-
-    if (issues.length === 0) {
-      resultDiv.innerHTML = `
-        <div style="background:rgba(0,0,0,.1);border:1px solid rgba(0,0,0,.3);border-radius:8px;padding:10px;font-size:11px;color:var(--success)">
-          ✅ No critical issues found by AI analysis!
-        </div>
-      `;
-      socket.off('review-result', reviewHandler);
-      return;
-    }
-
-    // Display AI suggestions
-    resultDiv.innerHTML = `
-      <div style="background:var(--card);border-radius:8px;padding:12px;max-height:500px;overflow-y:auto">
-        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-          🧠 Claude AI identified ${issues.length} issue${issues.length>1?'s':''} with actionable fixes:
-        </div>
-        ${issues.slice(0,10).map((issue, i) => {
-          const severityColors = {
-            critical: '#e82276',
-            major: '#444444',
-            minor: '#666666'
-          };
-          const bgColors = {
-            critical: 'rgba(232,34,118,.1)',
-            major: 'rgba(0,0,0,.1)',
-            minor: 'rgba(0,0,0,.1)'
-          };
-          return `
-            <div style="background:${bgColors[issue.severity] || 'var(--surface)'};border-left:3px solid ${severityColors[issue.severity] || 'var(--border)'};border-radius:6px;padding:10px;margin-bottom:10px">
-              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-                <span style="background:${severityColors[issue.severity]};color:#fff;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase">${issue.severity}</span>
-                ${issue.category ? `<span style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:9px">${issue.category}</span>` : ''}
-                ${issue.cwe ? `<span style="background:#b81b5e;color:#fff;padding:2px 6px;border-radius:4px;font-size:9px;font-family:monospace">${issue.cwe}</span>` : ''}
-              </div>
-              <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">${i+1}. ${escHtml(issue.title)}</div>
-              <div style="font-size:10px;color:var(--muted);margin-bottom:6px">
-                📍 ${escHtml(issue.file)}${issue.line ? ':'+issue.line : ''}
-              </div>
-              <div style="font-size:10px;color:var(--text);margin-bottom:8px;line-height:1.5">
-                <strong>Issue:</strong> ${escHtml(issue.description)}
-              </div>
-              <div style="background:rgba(0,0,0,.1);border:1px solid rgba(0,0,0,.3);border-radius:6px;padding:8px">
-                <div style="font-size:10px;font-weight:700;color:var(--success);margin-bottom:4px">
-                  💡 Recommended Fix:
-                </div>
-                <div style="font-size:10px;color:var(--text);line-height:1.5">${escHtml(issue.fix)}</div>
-              </div>
-            </div>
-          `;
-        }).join('')}
-        ${issues.length > 10 ? `
-          <div style="text-align:center;font-size:10px;color:var(--muted);padding:8px">
-            ...and ${issues.length - 10} more issue${issues.length - 10 > 1 ? 's' : ''}
-          </div>
-        ` : ''}
-      </div>
-    `;
-
-    socket.off('review-result', reviewHandler);
-  };
-
-  socket.on('review-result', reviewHandler);
-}
 
 </script>
 </body>

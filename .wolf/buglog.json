@@ -424,6 +424,18 @@
       "related_bugs": ["bug-026"],
       "occurrences": 1,
       "last_seen": "2026-08-11T10:59:00.000Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-08-12T00:00:00.000Z",
+      "error_message": "AI Review returns 'API key is invalid' even though .env's ANTHROPIC_API_KEY is a valid (just credit-exhausted) key",
+      "file": "server.js",
+      "root_cause": "A stale ANTHROPIC_API_KEY was already set at the Windows User+Machine environment-variable level (verified via [Environment]::GetEnvironmentVariable). dotenv.config() does NOT override existing process.env values by default, so the OS-level (invalid) key silently won over the correct .env value — server startup log 'AI Key: Set' was misleading since it didn't reveal which source won.",
+      "fix": "Changed require('dotenv').config() to require('dotenv').config({ override: true }) in server.js so .env always takes precedence over stale OS-level env vars of the same name. Confirmed the real Anthropic key in .env is valid but out of credit balance (direct curl to api.anthropic.com/v1/messages returns 'Your credit balance is too low') — that is a separate, account-level issue the user needs to resolve at console.anthropic.com/settings/billing, not a code bug.",
+      "tags": ["anthropic", "dotenv", "env-var-shadowing", "ai-review", "api-key"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-12T00:00:00.000Z"
     }
   ]
 }
