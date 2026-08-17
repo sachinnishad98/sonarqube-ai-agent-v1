@@ -225,3 +225,6 @@
 | 17:36 | Recorded git preference: commit direct to main, no branches/PRs | .wolf/cerebrum.md | done | ~400 |
 | 17:58 | Fixed GitHub PAT leak in gitExec logs, git-invoked sonar-scanner, SonarQube preflight, SMTP + Anthropic error clarity | server.js | done | ~6200 |
 | 18:00 | Started SonarQube (was stopped — root cause of scan failure). Scan now works: 249 issues, 6443 LOC | StartSonar.bat | verified | ~1200 |
+| 10:12 | Started both servers for morning check — agent (npm start, :3002) + SonarQube (StartSonar.bat, :9000) | npm, StartSonar.bat | both UP; SONAR_TOKEN valid; sonar admin/admin rejected | ~1500 |
+| 16:45 | Full codebase check + started both servers. Verified: node syntax clean, deps installed, .env gitignored, SONAR/GITHUB/ANTHROPIC tokens all valid, agent auth gate returns 401/302 correctly | server.js, .env, StartSonar.bat | both UP (:9000 + :3002); agent admin password unknown, SMTP_PASS empty, AI_MODEL unset | ~9000 |
+| 17:20 | Dockerised: separate agent + SonarQube images, agent reverse-proxies SonarQube at /sonarqube. Made server.js container-portable (HOST bind, cross-platform safeEnv PATH, PUBLIC_ORIGIN for CORS/CSP) | Dockerfile, Dockerfile.sonarqube, docker-compose.yml, .dockerignore, .env.docker.example, server.js, .gitignore | proxy verified end-to-end (200 from SonarQube); image build NOT tested — Docker daemon down | ~14000 |

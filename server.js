@@ -29,12 +29,92 @@ require('dotenv').config({ override: true });
 const app    = express();
 const server = http.createServer(app);
 
-// ─── SECURITY: CORS — localhost only ─────────────────────────────────────────
+// ─── SECURITY: CORS — localhost plus any explicitly allowed public origin ────
+// Behind an ALB / custom domain the browser's origin is no longer localhost, so
+// PUBLIC_ORIGIN (comma-separated, e.g. "https://sonarai.example.com") must list
+// every origin the dashboard is actually served from.
+const PUBLIC_ORIGINS = String(process.env.PUBLIC_ORIGIN || '')
+  .split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean);
+
+const ALLOWED_ORIGINS = [
+  'http://localhost:3001',  'http://127.0.0.1:3001',
+  'http://localhost:3002',  'http://127.0.0.1:3002',
+  ...PUBLIC_ORIGINS
+];
+
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:3001', 'http://127.0.0.1:3001'],
+    origin: ALLOWED_ORIGINS,
     methods: ['GET', 'POST']
   }
+});
+
+// Socket.IO upgrades to ws:// (or wss:// behind TLS), and CSP matches the
+// websocket scheme literally — so every public origin needs its ws/wss twin
+// listed in connect-src or the dashboard's live scan log goes silent.
+const WS_ORIGINS = PUBLIC_ORIGINS.flatMap(o => {
+  const hostPart = o.replace(/^https?:\/\//, '');
+  return [`ws://${hostPart}`, `wss://${hostPart}`];
+});
+
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+  "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+  ["connect-src 'self'",
+   'ws://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3002 ws://127.0.0.1:3002',
+   ...PUBLIC_ORIGINS, ...WS_ORIGINS].join(' '),
+  "img-src 'self' data:"
+].join('; ');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SONARQUBE REVERSE PROXY  —  /sonarqube/*  →  SONAR_URL
+   ═══════════════════════════════════════════════════════════════════════════
+   The SonarQube container is never published to the outside world; only this
+   app is. Everything under /sonarqube is piped through to it, so one exposed
+   port serves both the dashboard and the SonarQube UI.
+
+   Mounted FIRST, ahead of express.json() and the CSP/X-Frame headers, because:
+     - express.json() would consume the request body and SonarQube would hang
+       waiting for a POST payload that never arrives;
+     - this app's CSP and X-Frame-Options: DENY would break SonarQube's own UI.
+
+   Requires the SonarQube image to run with SONAR_WEB_CONTEXT=/sonarqube, so it
+   emits its asset URLs already prefixed — otherwise its JS/CSS would 404.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SONAR_PROXY_PATH = process.env.SONAR_PROXY_PATH || '/sonarqube';
+
+app.use(SONAR_PROXY_PATH, (req, res) => {
+  // currentUser is defined further down; this only runs per-request, by which
+  // point the module is fully evaluated.
+  if (!currentUser(req)) return res.redirect('/login');
+
+  const target = new URL(SONAR_URL);
+  const client = target.protocol === 'https:' ? require('https') : http;
+
+  const proxyReq = client.request({
+    protocol: target.protocol,
+    hostname: target.hostname,
+    port:     target.port || (target.protocol === 'https:' ? 443 : 80),
+    method:   req.method,
+    // originalUrl keeps the /sonarqube prefix that express strips from req.url —
+    // SonarQube needs it because it is serving under that web context.
+    path:     req.originalUrl,
+    headers:  { ...req.headers, host: target.host }
+  }, upstream => {
+    res.writeHead(upstream.statusCode, upstream.headers);
+    upstream.pipe(res);
+  });
+
+  proxyReq.on('error', e => {
+    if (res.headersSent) return res.destroy();
+    res.status(502).json({
+      error: `SonarQube unreachable at ${SONAR_URL} — ${safeError(e)}`
+    });
+  });
+
+  req.pipe(proxyReq);
 });
 
 // ─── SECURITY: HTTP HEADERS ──────────────────────────────────────────────────
@@ -43,10 +123,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' ws://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3002 ws://127.0.0.1:3002; img-src 'self' data:"
-  );
+  res.setHeader('Content-Security-Policy', CSP);
   next();
 });
 
@@ -73,6 +150,9 @@ const AI_MODEL        = process.env.AI_MODEL         || 'claude-sonnet-4-5';
 const NOTIFY_EMAIL    = process.env.NOTIFY_EMAIL     || '';
 
 const PORT            = parseInt(process.env.PORT)   || 3001;
+// Bare metal stays loopback-only. Inside a container the port must be published
+// on 0.0.0.0 or Docker/ECS can never reach it — set HOST=0.0.0.0 there.
+const HOST            = process.env.HOST             || '127.0.0.1';
 const GITHUB_TIMEOUT  = 12000;
 
 // Startup validation
@@ -196,8 +276,11 @@ function gitExec(args, cwd) {
 /** Run dotnet sonarscanner commands — streams output to socket */
 function runCommand(cmd, cwd, socket, eventName) {
   return new Promise((resolve, reject) => {
-    // Safe env — only what dotnet needs
-    const safeEnv = {
+    // Safe env — only what the scanner toolchain needs. Never the full
+    // process.env, which carries GITHUB_TOKEN / ANTHROPIC_API_KEY.
+    // The PATH separator differs per platform (';' on Windows, ':' elsewhere),
+    // so the two branches are kept separate rather than templated.
+    const safeEnv = process.platform === 'win32' ? {
       PATH:        `${DOTNET_ROOT};${process.env.PATH || ''}`,
       DOTNET_ROOT: DOTNET_ROOT,
       TEMP:        process.env.TEMP       || 'C:\\Windows\\Temp',
@@ -206,6 +289,15 @@ function runCommand(cmd, cwd, socket, eventName) {
       SYSTEMROOT:  process.env.SYSTEMROOT || 'C:\\Windows',
       ComSpec:     process.env.ComSpec    || 'C:\\Windows\\system32\\cmd.exe',
       HOME:        process.env.USERPROFILE|| '',
+    } : {
+      // Linux/container: sonar-scanner and git both need a real HOME and TMPDIR
+      // or they fail with "cannot create cache directory".
+      PATH:      process.env.PATH   || '/usr/local/bin:/usr/bin:/bin',
+      HOME:      process.env.HOME   || '/tmp',
+      TMPDIR:    process.env.TMPDIR || '/tmp',
+      LANG:      process.env.LANG   || 'C.UTF-8',
+      JAVA_HOME: process.env.JAVA_HOME || '',
+      SONAR_SCANNER_OPTS: process.env.SONAR_SCANNER_OPTS || '',
     };
     const proc = spawn(cmd, [], { cwd, shell: true, env: safeEnv });
     let out = '';
@@ -1547,8 +1639,9 @@ app.get('/api/config', (_, res) => res.json({
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
 // ─── START ────────────────────────────────────────────────────────────────────
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, HOST, () => {
   console.log(`\n🚀 SonarAI v3.0 (GitHub Edition) → http://localhost:${PORT}`);
+  console.log(`   Bind    : ${HOST}:${PORT}`);
   console.log(`   GitHub  : ${GITHUB_USERNAME || '⚠️ NOT SET'}`);
   console.log(`   Sonar   : ${SONAR_URL}`);
   console.log(`   Repos   : ${REPO_BASE_PATH}`);

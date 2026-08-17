@@ -7,7 +7,11 @@
 .env
 .env.local
 .env.production
+.env.docker
 *.env
+
+# Docker env template is safe (no values) — keep it tracked
+!.env.docker.example
 .claude
 
 # Auto-generated per-scan, contains live SONAR_TOKEN — never commit

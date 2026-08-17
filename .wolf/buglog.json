@@ -609,6 +609,25 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-12T17:57:00.000Z"
+    },
+    {
+      "id": "bug-038",
+      "timestamp": "2026-08-17T11:18:38.799Z",
+      "error_message": "'StartSonar.bat' is not recognized as an internal or external command, operable program or batch file",
+      "file": "D:/SonarQube/sonarqube-26.4.0.121862/bin/windows-x86-64/StartSonar.bat",
+      "root_cause": "Invoking the .bat by bare name after cd (via bash cmd //c, PowerShell Set-Location + cmd /c, or cmd /c \"cd /d ... && StartSonar.bat\") never resolves it, even though PATHEXT contains .BAT and the file exists. The shell wrapper does not resolve bare batch names against the new working directory.",
+      "fix": "Invoke with an explicit full path through cmd call: cmd /c \"call D:\\SonarQube\\sonarqube-26.4.0.121862\\bin\\windows-x86-64\\StartSonar.bat\" — run it as a background task since boot takes ~90s.",
+      "tags": [
+        "sonarqube",
+        "startup",
+        "windows",
+        "batch",
+        "powershell",
+        "tooling"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-17T11:18:38.799Z"
     }
   ]
 }

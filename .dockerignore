@@ -1,0 +1,56 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  Keeps the build context small and, more importantly, keeps secrets and local
+#  runtime state OUT of the image. Anything listed here is invisible to COPY.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── SECRETS — never in an image layer ─────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.docker.example
+*.env
+
+# Auto-generated per scan, contains a live SONAR_TOKEN
+sonar-project.properties
+
+# ── Local runtime state ───────────────────────────────────────────────────────
+# users.json holds the admin password hash + session secret; it belongs in a
+# volume, not in the image (otherwise every deployment ships the same secret).
+data/
+.scannerwork/
+.sonarqube/
+
+# ── Dependencies — reinstalled inside the build via npm ci ────────────────────
+node_modules/
+npm-debug.log*
+
+# ── Tooling / editor / VCS ────────────────────────────────────────────────────
+.git/
+.gitignore
+.claude/
+.wolf/
+.vscode/
+.idea/
+
+# ── Windows-only helpers, useless in a Linux image ────────────────────────────
+*.bat
+
+# ── Docs and dev-only scripts ─────────────────────────────────────────────────
+*.md
+test-setup.js
+sonarqube-label-fix.js
+ErrorPng/
+
+# ── Build artefacts / logs / OS noise ─────────────────────────────────────────
+logs/
+*.log
+coverage/
+dist/
+build/
+.DS_Store
+Thumbs.db
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore

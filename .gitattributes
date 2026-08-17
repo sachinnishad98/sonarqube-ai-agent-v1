@@ -1,0 +1,29 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  core.autocrlf=true on the dev machine, so a fresh clone on Windows would get
+#  CRLF line endings. Files consumed by Linux tooling inside the containers must
+#  stay LF — a Dockerfile with CRLF can break RUN line continuations, and a shell
+#  script with CRLF fails with "\r: command not found".
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Sensible default: let git normalise text in the repo, decide per-type below.
+* text=auto
+
+# ── Must stay LF ──────────────────────────────────────────────────────────────
+Dockerfile        text eol=lf
+Dockerfile.*      text eol=lf
+.dockerignore     text eol=lf
+docker-compose.yml text eol=lf
+*.sh              text eol=lf
+.env.example      text eol=lf
+.env.docker.example text eol=lf
+
+# ── Windows-only helpers: CRLF is correct for cmd.exe ─────────────────────────
+*.bat             text eol=crlf
+*.cmd             text eol=crlf
+
+# ── Binary — never touch ──────────────────────────────────────────────────────
+*.png             binary
+*.jpg             binary
+*.zip             binary
+*.7z              binary
+*.msi             binary

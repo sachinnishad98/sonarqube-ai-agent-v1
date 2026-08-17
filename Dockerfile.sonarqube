@@ -1,0 +1,54 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  SonarQube server — image #2 of 2. Deployed alongside the agent image.
+#
+#  The one thing that matters here is SONAR_WEB_CONTEXT=/sonarqube. Without it
+#  SonarQube emits its asset URLs at the root (/js/..., /api/...), which 404
+#  once the agent reverse-proxies it under /sonarqube. With it, every URL
+#  SonarQube generates is already prefixed and the proxy is transparent.
+#
+#  Build:  docker build -f Dockerfile.sonarqube -t sonarai-sonarqube:26.4 .
+#  Run:    docker run -d --name sonarqube --network sonarai sonarai-sonarqube:26.4
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Pinned to the exact build already running on the dev machine (26.4.0.121862)
+# so the containerised instance reads the same data-directory format — a newer
+# tag would trigger a one-way DB migration on first boot.
+#
+# Base is Ubuntu 24.04 + Temurin JDK 25, running as the unprivileged `sonarqube`
+# user (uid 1000). `curl` and `bash` are already installed by the base image, so
+# nothing needs to be added here — this image is pure configuration.
+FROM sonarqube:26.4.0.121862-community
+
+# Serve under a sub-path so the agent can reverse-proxy it at /sonarqube.
+# MUST match SONAR_PROXY_PATH in the agent image.
+ENV SONAR_WEB_CONTEXT=/sonarqube
+
+# Listen on every interface inside the container so the agent container can
+# reach it over the Docker network. This port is NOT published to the host —
+# the agent is the only public entrypoint.
+ENV SONAR_WEB_HOST=0.0.0.0 \
+    SONAR_WEB_PORT=9000
+
+# Embedded H2 is fine for a throwaway demo, but SonarQube refuses to start on it
+# in production mode and it cannot survive a version upgrade. Supply Postgres at
+# run time (compose does this, or point at RDS):
+#   SONAR_JDBC_URL=jdbc:postgresql://<host>:5432/sonar
+#   SONAR_JDBC_USERNAME=sonar
+#   SONAR_JDBC_PASSWORD=<secret>
+#
+# Deliberately left unset — credentials must never live in an image layer.
+
+# Elasticsearch inside SonarQube needs a raised mmap count. That is a HOST
+# setting and cannot be applied from inside the container:
+#   Linux/EC2 :  sudo sysctl -w vm.max_map_count=524288
+#   Docker Desktop (Windows/macOS) : already high enough, nothing to do
+# If this is wrong the container exits during boot with
+# "max virtual memory areas vm.max_map_count [65530] is too low".
+
+EXPOSE 9000
+
+# start-period is deliberately long — SonarQube needs 90s+ to reach UP, and a
+# shorter window would mark it unhealthy and have the orchestrator kill it
+# mid-boot, in a restart loop that never converges.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=10 \
+  CMD curl -fsS http://127.0.0.1:9000/sonarqube/api/system/status | grep -q '"status":"UP"' || exit 1

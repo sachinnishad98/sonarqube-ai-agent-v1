@@ -1,0 +1,104 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  Two images, wired together. Only `agent` publishes a port — SonarQube is
+#  reachable through it at http://localhost:3002/sonarqube
+#
+#    docker compose build
+#    docker compose up -d
+#
+#  On AWS these become two task/pod definitions on the same network; the only
+#  thing that changes is that SONAR_URL points at the service DNS name instead
+#  of the compose service name.
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Postgres — SonarQube's database ─────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: sonarai-db
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}
+      POSTGRES_DB: sonar
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [sonarai]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── SonarQube server ────────────────────────────────────────────────────────
+  # Deliberately no `ports:` — it is only reachable via the agent's proxy.
+  sonarqube:
+    build:
+      context: .
+      dockerfile: Dockerfile.sonarqube
+    image: sonarai-sonarqube:26.4.0.121862
+    container_name: sonarai-sonarqube
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
+      SONAR_WEB_CONTEXT: /sonarqube
+    volumes:
+      - sonar_data:/opt/sonarqube/data
+      - sonar_extensions:/opt/sonarqube/extensions
+      - sonar_logs:/opt/sonarqube/logs
+    networks: [sonarai]
+    restart: unless-stopped
+    # Elasticsearch needs a raised mmap limit and a high fd ceiling or the
+    # container dies during boot with "max virtual memory areas too low".
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    # Requires the Docker host to allow it. On Linux hosts run once:
+    #   sudo sysctl -w vm.max_map_count=524288
+    # On Docker Desktop (Windows/macOS) this is already high enough.
+
+  # ── SonarAI agent — the only service exposed to the outside ─────────────────
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sonarai-agent:2.1.0
+    container_name: sonarai-agent
+    depends_on:
+      - sonarqube
+    env_file:
+      - .env.docker
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3002
+      REPO_PATH: /repos
+      # Service DNS name, not localhost — localhost inside this container is
+      # the container itself, not the SonarQube one.
+      SONAR_URL: http://sonarqube:9000/sonarqube
+      SONAR_PROXY_PATH: /sonarqube
+    ports:
+      - "3002:3002"
+    volumes:
+      # Survives restarts: admin account, session secret, AI report history.
+      - agent_data:/app/data
+      # Cloned repos — persisted so a restart does not re-clone everything.
+      - agent_repos:/repos
+    networks: [sonarai]
+    restart: unless-stopped
+
+networks:
+  sonarai:
+    driver: bridge
+
+volumes:
+  pg_data:
+  sonar_data:
+  sonar_extensions:
+  sonar_logs:
+  agent_data:
+  agent_repos:

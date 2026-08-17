@@ -5,7 +5,12 @@
 
 ## ./
 
-- `.gitignore` — Git ignore rules (~94 tok)
+- `.gitignore` — Git ignore rules (~110 tok)
+- `.dockerignore` — Keeps .env, data/, node_modules, .git and the .bat helpers out of the build context (~230 tok)
+- `Dockerfile` — Agent image. 3 stages: scanner (downloads sonar-scanner CLI), deps (npm ci --omit=dev), runtime (node:22-slim + git + JRE 17). Non-root, tini PID 1, HOST=0.0.0.0. Does NOT contain SonarQube. (~900 tok)
+- `Dockerfile.sonarqube` — SonarQube image, pinned to sonarqube:26.4.0.121862-community. Only real change is SONAR_WEB_CONTEXT=/sonarqube so the agent can reverse-proxy it. (~430 tok)
+- `docker-compose.yml` — agent + sonarqube + postgres. Only `agent` publishes a port (3002); SonarQube is reached through the agent proxy at /sonarqube. (~750 tok)
+- `.env.docker.example` — Runtime env template for the containers (~450 tok)
 - `check-sonar.bat` (~190 tok)
 - `CLAUDE.md` — OpenWolf (~57 tok)
 - `install-sonar-scanner.bat` (~271 tok)
