@@ -628,6 +628,101 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-08-17T11:18:38.799Z"
+    },
+    {
+      "id": "bug-039",
+      "timestamp": "2026-08-18T12:50:00.000Z",
+      "error_message": "{\"result\":\"Password must be at least 12 characters long\"} — HTTP 400 from api/users/change_password",
+      "file": "D:/SonarQube/sonarqube-26.4.0.121862/conf/sonar.properties",
+      "root_cause": "After repointing SonarQube at the external Postgres the schema was fresh, so admin reverted to admin/admin and had to be reset. SonarQube 26.x enforces a 12-character minimum on api/users/change_password; the first attempt used <11-char-password> (11 chars) and was rejected with HTTP 400.",
+      "fix": "Used a 12+ character password (<sonarqube-admin-password>). Also had to mint a brand new SONAR_TOKEN afterwards — the pre-switch token belonged to the old H2 schema and no longer existed.",
+      "tags": [
+        "sonarqube",
+        "postgres",
+        "database-switch",
+        "password-policy",
+        "token",
+        "auth"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-18T12:50:00.000Z"
+    },
+    {
+      "id": "bug-040",
+      "timestamp": "2026-08-18T13:05:00.000Z",
+      "error_message": "Too many failed attempts. Try again in 15 minutes. (HTTP 429) then Cannot reach the agent. Is the server running?",
+      "file": "server.js",
+      "root_cause": "User typed <a-wrong-password> instead of the actual password <dashboard-admin-password>, tripping the login rate limiter at server.js:711 — loginAttempts is an in-memory Map keyed by IP, 8 failures per 15-minute window. The follow-up unreachable error was self-inflicted: the fix restarts the process, and the user refreshed during the ~2s boot gap.",
+      "fix": "Killed the node process on :3002 (taskkill /F) and ran npm start again — the lockout lives only in process memory, so a restart clears it instantly; no 15-minute wait is needed. Verified with a curl login returning HTTP 200. There is no persisted lockout and no unlock endpoint.",
+      "tags": [
+        "auth",
+        "login",
+        "rate-limit",
+        "429",
+        "lockout",
+        "restart"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-18T13:05:00.000Z"
+    },
+    {
+      "id": "bug-041",
+      "timestamp": "2026-08-18T15:05:00.000Z",
+      "error_message": "Report header said \"252 total\" while the severity bar and issue table only covered 50 findings",
+      "file": "server.js",
+      "root_cause": "fetchSonarReport() made a single call to /api/issues/search with ps=50. It read  from the response (the real count) but only ever kept the first page of issues, so every derived summary silently disagreed with the headline number.",
+      "fix": "Paginate at ps=500 (Sonar API max) up to a 2000-issue cap, accumulating across pages. Verified: a scan reporting 285 issues now renders all 285 (severity bar sums 6+142+137) and the XML contains 285 <issue> elements.",
+      "tags": [
+        "sonarqube",
+        "api",
+        "pagination",
+        "reporting",
+        "silent-truncation"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-18T15:05:00.000Z"
+    },
+    {
+      "id": "bug-042",
+      "timestamp": "2026-08-18T16:20:00.000Z",
+      "error_message": "ReferenceError: missing is not defined — thrown from sendEmail(), surfaced in the review log as \"missing is not defined\" immediately after \"Sending report by email...\"",
+      "file": "server.js",
+      "root_cause": "When sendEmail() was changed to return a status object instead of returning silently, the new return statement referenced `missing` — a const declared inside the nested `if (!smtpWarned)` block. const is block-scoped, so it was never visible at the return statement. It threw on every call, not just the first: the declaration site and the use site were in different scopes regardless of the warn-once flag. Compounding it, the email call had no try/catch of its own, so the throw propagated to the review handler's outer catch and reported the entire review as failed — even though the AI review had completed and report #6 was already stored in Postgres.",
+      "fix": "Hoisted the `missing` const out of the `if (!smtpWarned)` block so the warn-once console output and the returned reason string no longer share a scope. Also wrapped the whole email step in its own try/catch: notification is the last and least important stage of the flow, so a mail failure now logs a warning instead of discarding a completed review and a stored report.",
+      "tags": [
+        "javascript",
+        "block-scope",
+        "const",
+        "email",
+        "smtp",
+        "error-handling",
+        "review-flow"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-18T16:20:00.000Z"
+    },
+    {
+      "id": "bug-043",
+      "timestamp": "2026-08-18T18:40:00.000Z",
+      "error_message": "User: hovering near the top of the HTML report turned the whole area white",
+      "file": "lib/sonar-report.js",
+      "root_cause": "The enhancement stylesheet carried an unscoped rule: tbody tr:hover { background:#fff7fb !important }. The report is built almost entirely from nested LAYOUT tables (masthead, stat tiles, section headings), and every one of those has an implicit tbody. Hovering anywhere over them repainted the pink gradient masthead and the metric tiles to the near-white hover tint. The !important made it override the inline gradient.",
+      "fix": "Added class=dt to data tables only and scoped the rule to .dt tbody tr:hover, so the hover tint applies to report rows and never to layout scaffolding. Verified: masthead stays pink under the cursor, and a data row still tints to rgb(255,247,251).",
+      "tags": [
+        "css",
+        "hover",
+        "specificity",
+        "layout-tables",
+        "html-report",
+        "regression"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-08-18T18:40:00.000Z"
     }
   ]
 }

@@ -310,6 +310,7 @@
       <div class="nav-group-items">
         <div class="nav-item" id="nav-ai-reports"  onclick="showView('ai-reports')"><i class="fa-solid fa-shield-halved"></i><span class="nav-label">AI Reports</span><span class="nav-badge" id="nav-badge-reports">0</span></div>
         <div class="nav-item" id="nav-ai-insights" onclick="showView('ai-insights')"><i class="fa-solid fa-brain"></i><span class="nav-label">AI Insights</span></div>
+        <div class="nav-item" id="nav-ai-config" onclick="showView('ai-config')"><i class="fa-solid fa-sliders"></i><span class="nav-label">AI Settings</span></div>
         <div class="nav-item disabled" title="Not built yet"><i class="fa-solid fa-comments"></i><span class="nav-label">AI Chat</span><span class="nav-badge">SOON</span></div>
       </div>
     </div>
@@ -594,6 +595,15 @@
       </div>
       <div id="ai-reports-empty" style="display:none;text-align:center;padding:40px;color:var(--muted)">No AI reviews yet — run a SonarQube Scan, then Level 1 (AI Review), from a repo/branch.</div>
       <div id="ai-reports-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px"></div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-title">
+          <i class="fa-solid fa-database" style="color:var(--accent)"></i> Stored reports
+          <span class="pill pill-idle" id="stored-reports-pill" style="margin-left:auto">—</span>
+        </div>
+        <div class="card-note" style="margin-bottom:10px">Full SonarQube reports saved in PostgreSQL as HTML and XML. These survive restarts and are readable straight from the database.</div>
+        <div id="stored-reports-list"></div>
+      </div>
     </div>
 
     <div id="ai-report-detail-wrap" class="hidden">
@@ -728,6 +738,90 @@
       <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--accent)"></i> Branches Needing Attention</div>
       <div class="card-note" style="margin-bottom:12px">Lowest scoring reviews first — start here</div>
       <div id="ins-attention"></div>
+    </div>
+  </div>
+
+  <!-- ══ AI SETTINGS ═══════════════════════════════════════════════════════ -->
+  <div id="view-ai-config" class="fade-in hidden">
+    <div class="page-head">
+      <div>
+        <h2 class="page-title"><i class="fa-solid fa-sliders" style="color:var(--accent)"></i> AI Settings</h2>
+        <p class="page-sub">Which model runs the review, and the key it uses</p>
+      </div>
+      <span class="pill" id="aic-active-pill">—</span>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-plug" style="color:var(--accent)"></i> Provider</div>
+        <div class="card-note" style="margin-bottom:12px">Keys are stored encrypted on the server and are never sent back to this page. Changes apply to the next review — no restart needed.</div>
+
+        <div style="display:grid;gap:14px;margin-top:6px">
+          <div>
+            <label class="setting-name" for="aic-provider">Provider</label>
+            <select id="aic-provider" onchange="aicOnProviderChange()"
+              style="width:100%;height:38px;border-radius:9px;border:1px solid var(--border);background:#fff;padding:0 10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;cursor:pointer;margin-top:6px"></select>
+          </div>
+
+          <div id="aic-baseurl-wrap" style="display:none">
+            <label class="setting-name" for="aic-baseurl">API base URL</label>
+            <div class="setting-desc">Any OpenAI-compatible endpoint, e.g. <span class="mono">https://host/v1</span></div>
+            <input type="text" id="aic-baseurl" placeholder="https://your-host/v1" spellcheck="false"
+              style="width:100%;height:38px;border-radius:9px;border:1px solid var(--border);padding:0 11px;font-size:13px;margin-top:6px;font-family:'DM Mono',monospace">
+          </div>
+
+          <div>
+            <label class="setting-name" for="aic-key">API key</label>
+            <div class="setting-desc" id="aic-key-state">—</div>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <input type="password" id="aic-key" placeholder="paste key" spellcheck="false" autocomplete="off"
+                style="flex:1;height:38px;border-radius:9px;border:1px solid var(--border);padding:0 11px;font-size:13px;font-family:'DM Mono',monospace">
+              <button class="icon-btn" title="Show / hide" onclick="aicToggleKeyVisibility()" style="width:38px;height:38px"><i class="fa-solid fa-eye" id="aic-key-eye"></i></button>
+              <button class="icon-btn" title="Remove the stored key for this provider" onclick="aicClearKey()" style="width:38px;height:38px"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            <div class="card-note" id="aic-key-help" style="margin-top:6px"></div>
+          </div>
+
+          <div>
+            <label class="setting-name" for="aic-model-select">Model</label>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <select id="aic-model-select" onchange="aicOnModelPick()"
+                style="flex:1;height:38px;border-radius:9px;border:1px solid var(--border);background:#fff;padding:0 10px;font-size:13px;font-family:'DM Mono',monospace;outline:none;cursor:pointer"></select>
+              <button class="icon-btn" style="width:auto;padding:0 12px;height:38px;font-size:12px;font-weight:600;gap:6px" onclick="aicFetchModels()" title="Reload the list from the provider"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <input type="text" id="aic-model" placeholder="type the exact model name" spellcheck="false"
+              style="width:100%;height:38px;border-radius:9px;border:1px solid var(--border);padding:0 11px;font-size:13px;margin-top:8px;font-family:'DM Mono',monospace;display:none">
+            <div class="card-note" id="aic-model-note" style="margin-top:6px">Loading the models this key can use…</div>
+          </div>
+
+          <div>
+            <label class="setting-name" for="aic-maxtokens">Max output tokens</label>
+            <div class="setting-desc">Caps the review response. 8000 suits most repositories.</div>
+            <input type="number" id="aic-maxtokens" min="256" max="64000" step="256"
+              style="width:120px;height:38px;border-radius:9px;border:1px solid var(--border);padding:0 11px;font-size:13px;margin-top:6px">
+          </div>
+
+          <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:2px">
+            <button class="btn-primary" onclick="aicSave()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save</button>
+            <button class="icon-btn" style="width:auto;padding:0 14px;height:38px;font-size:12.5px;font-weight:600;gap:7px" onclick="aicTest()"><i class="fa-solid fa-plug-circle-check"></i> Test connection</button>
+          </div>
+          <div id="aic-result" style="display:none;font-size:12.5px;padding:11px 13px;border-radius:9px;line-height:1.6"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-circle-check" style="color:var(--accent)"></i> Configured providers</div>
+          <div class="card-note" style="margin-bottom:10px">A key can be saved for each provider; only the selected one is used for reviews.</div>
+          <div id="aic-provider-status"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-database" style="color:var(--accent)"></i> Report storage</div>
+          <div class="card-note" style="margin-bottom:10px">Every review stores its HTML and XML report here.</div>
+          <div id="aic-db-status"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1281,6 +1375,7 @@ const VIEW_META = {
   'quality-gate': { title: 'Quality Gate',      sub: 'Pass / fail status of every reviewed branch',          group: 'operations' },
   'ai-reports':   { title: 'AI Reports',        sub: 'Level 1 reviews built from SonarQube findings',        group: 'ai' },
   'ai-insights':  { title: 'AI Insights',       sub: 'Trends and hotspots across all reviews',               group: 'ai' },
+  'ai-config':    { title: 'AI Settings',       sub: 'Which model runs the review, and the key it uses',     group: 'ai' },
   'sonar-server': { title: 'SonarQube Server',  sub: 'The analysis engine this agent drives',                group: 'platform' },
   'integrations': { title: 'Integrations',      sub: 'GitHub, SonarQube, Claude and SMTP status',            group: 'platform' },
   'pii':          { title: 'PII Settings',      sub: 'What leaves this machine, and what is shown',          group: 'admin' },
@@ -1316,10 +1411,12 @@ function showView(name) {
     $('ai-report-detail-wrap').classList.add('hidden');
     $('ai-reports-list-wrap').classList.remove('hidden');
     loadAiReports();
+    loadStoredReports();
   }
   if (name === 'scans')        renderScanHistory();
   if (name === 'quality-gate') renderQualityGate();
   if (name === 'ai-insights')  renderInsights();
+  if (name === 'ai-config')    aicLoad();
   if (name === 'tokens')       renderTokenUsage();
   if (name === 'audit')        renderAudit();
   if (name === 'sonar-server') checkAgentHealth();
@@ -1537,7 +1634,7 @@ socket.on('review-log', msg => {
   el.scrollTop = el.scrollHeight;
 });
 
-socket.on('review-result', ({ success, review, error }) => {
+socket.on('review-result', ({ success, review, error, projectKey, storedReportId }) => {
   const btn = document.getElementById('review-btn');
   btn.disabled = false;
   btn.innerHTML = '<i class="fa-solid fa-robot"></i> Run AI Review';
@@ -1545,10 +1642,16 @@ socket.on('review-result', ({ success, review, error }) => {
   el.style.display = 'block';
 
   if (!success) {
-    el.innerHTML = `<div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:10px;padding:12px;font-size:12px;color:#f390ba">❌ ${escHtml(error || 'Unknown error')}</div>`;
+    // The SonarQube report is stored even when the AI step fails, so surface
+    // its download links here rather than making the user hunt for them.
+    el.innerHTML = `<div style="background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.3);border-radius:10px;padding:12px;font-size:12px;color:#f390ba">❌ ${escHtml(error || 'Unknown error')}</div>`
+      + (storedReportId ? `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:8px">${reportActions(storedReportId, 'SonarQube report — still available')}</div>` : '');
     return;
   }
-  el.innerHTML = buildReviewHTML(review);
+  el.innerHTML = buildReviewHTML(review)
+    + `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:10px">
+         ${reportActions(storedReportId, 'Reports', projectKey || currentProjectKey)}
+       </div>`;
 });
 
 // Builds the full AI Review report HTML from a `review` object — reused by
@@ -2052,7 +2155,7 @@ socket.on('scan-log', ({ type, line }) => {
   }
 });
 
-socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, error }) => {
+socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, error, reportId }) => {
   const btn = document.getElementById('scan-btn');
   btn.disabled = false;
   btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart"></i> Run Sonar Scan';
@@ -2184,12 +2287,36 @@ socket.on('scan-complete', ({ success, branch, repoName, projectKey, report, err
         </div>
       </div>
       ${m.coverage ? `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--muted)">Coverage</span><span>${parseFloat(m.coverage).toFixed(1)}%</span></div><div style="height:4px;background:var(--border);border-radius:2px"><div style="height:100%;width:${m.coverage}%;background:var(--success);border-radius:2px"></div></div></div>` : ''}
-      <div style="display:flex;gap:6px">
+      ${reportActions(reportId, 'SonarQube report')}
+      <div style="display:flex;gap:6px;margin-top:8px">
         <a href="${sonarLink}" target="_blank" style="flex:1;text-align:center;padding:8px;background:rgba(232,34,118,.1);border:1px solid rgba(232,34,118,.2);border-radius:8px;color:var(--accent);text-decoration:none;font-size:11px"><i class="fa-solid fa-external-link"></i> View in SonarQube</a>
       </div>
       <button class="btn-primary btn-purple" onclick="switchTab('review')" style="margin-top:8px;width:100%;font-size:12px"><i class="fa-solid fa-robot"></i> Next: AI Review →</button>
     </div>`;
 });
+
+/**
+ * View / HTML / XML row for a stored report, shown inline wherever a report is
+ * produced so the user never has to leave the flow to reach it.
+ * @param {number|null} id     sonarai_reports row id, null when storage is off
+ * @param {string} label       what the report is, used in the heading
+ * @param {string|null} aiKey  project key, when an AI review HTML also exists
+ */
+function reportActions(id, label, aiKey) {
+  if (!id && !aiKey) return '';
+  const btn = (href, icon, text, dl) =>
+    `<a href="${href}" ${dl ? '' : 'target="_blank" rel="noreferrer"'} style="flex:1;text-align:center;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:11px;font-weight:600"><i class="fa-solid ${icon}"></i> ${text}</a>`;
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+    <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.5px;margin-bottom:6px">${label.toUpperCase()}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${id ? btn(`/api/reports/stored/${id}.html`, 'fa-eye', 'View') : ''}
+      ${id ? btn(`/api/reports/stored/${id}.html?download=1`, 'fa-file-code', 'HTML', true) : ''}
+      ${id ? btn(`/api/reports/stored/${id}.xml?download=1`, 'fa-file-lines', 'XML', true) : ''}
+      ${aiKey ? btn(`/api/reports/ai/${encodeURIComponent(aiKey)}.html`, 'fa-robot', 'AI HTML') : ''}
+      ${aiKey ? btn(`/api/reports/ai/${encodeURIComponent(aiKey)}.html?download=1`, 'fa-download', 'Save AI', true) : ''}
+    </div>
+  </div>`;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OPERATIONS · PLATFORM · ADMIN
@@ -2923,6 +3050,266 @@ socket.on('review-result', ({ success, review, projectKey, error }) => {
 // ── Boot ────────────────────────────────────────────────────────────────────
 // Identity first: without a valid session there is nothing to render, and the
 // server would 401 every call anyway.
+/* ═══ STORED REPORTS (PostgreSQL) ═════════════════════════════════════════ */
+async function loadStoredReports() {
+  const list = $('stored-reports-list');
+  const pill = $('stored-reports-pill');
+  list.innerHTML = '<div class="card-note">Loading…</div>';
+  try {
+    const r = await fetch('/api/reports/stored?limit=25');
+    const j = await r.json();
+    if (!j.enabled) {
+      pill.className = 'pill pill-idle'; pill.textContent = 'off';
+      list.innerHTML = `<div class="card-note">${j.reason || 'Database storage is disabled.'}</div>`;
+      return;
+    }
+    pill.className = 'pill ' + (j.reports.length ? 'pill-ok' : 'pill-idle');
+    pill.textContent = `${j.reports.length} stored`;
+    if (!j.reports.length) {
+      list.innerHTML = `<div class="card-note">Nothing stored yet — the next AI review will write its report to <span class="mono">${j.host}</span>.</div>`;
+      return;
+    }
+    list.innerHTML = j.reports.map(rep => {
+      const m = rep.metrics || {};
+      const when = new Date(rep.generated_at).toLocaleString();
+      return `<div class="setting-row">
+        <div style="flex:1;min-width:0">
+          <div class="setting-name">#${rep.id} · ${rep.repo_name || rep.project_key} <span style="color:var(--muted);font-weight:500">(${rep.branch || 'main'})</span></div>
+          <div class="setting-desc">${when} — ${rep.total_issues ?? 0} issues${m.ncloc ? ` · ${m.ncloc} lines` : ''}${rep.ai_provider ? ` · <span class="mono">${rep.ai_provider}</span>` : ''}</div>
+        </div>
+        <div style="display:flex;gap:7px;flex-shrink:0">
+          <a class="icon-btn" style="width:auto;padding:0 11px;height:32px;font-size:11.5px;font-weight:600;gap:6px;text-decoration:none" href="/api/reports/stored/${rep.id}.html" target="_blank" rel="noreferrer" title="Open the HTML report"><i class="fa-solid fa-eye"></i> View</a>
+          <a class="icon-btn" style="width:auto;padding:0 11px;height:32px;font-size:11.5px;font-weight:600;gap:6px;text-decoration:none" href="/api/reports/stored/${rep.id}.html?download=1" title="Download HTML"><i class="fa-solid fa-file-code"></i> HTML</a>
+          <a class="icon-btn" style="width:auto;padding:0 11px;height:32px;font-size:11.5px;font-weight:600;gap:6px;text-decoration:none" href="/api/reports/stored/${rep.id}.xml?download=1" title="Download XML"><i class="fa-solid fa-file-lines"></i> XML</a>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    pill.className = 'pill pill-fail'; pill.textContent = 'error';
+    list.innerHTML = `<div class="card-note" style="color:#991b1b">Could not load stored reports — ${e.message}</div>`;
+  }
+}
+
+/* ═══ AI SETTINGS ═════════════════════════════════════════════════════════
+   The API is deliberately write-only for keys: the browser can set one and
+   see a masked preview, but never read it back. So "has a key" is a boolean
+   from the server, not something this page can verify itself.            */
+let aicState = null;
+
+function aicProvider() { return $('aic-provider').value; }
+function aicMeta(id) { return (aicState?.providers || []).find(p => p.id === (id || aicProvider())); }
+
+function aicSay(kind, msg) {
+  const box = $('aic-result');
+  const style = {
+    ok:   ['#ecfdf5', '#a7f3d0', '#065f46'],
+    err:  ['#fef2f2', '#fecaca', '#991b1b'],
+    info: ['#eff6ff', '#bfdbfe', '#1e40af']
+  }[kind] || ['#f9fafb', '#e5e7eb', '#374151'];
+  box.style.display = 'block';
+  box.style.background = style[0];
+  box.style.border = `1px solid ${style[1]}`;
+  box.style.color = style[2];
+  box.innerHTML = msg;
+}
+
+async function aicLoad() {
+  try {
+    const r = await fetch('/api/ai-settings');
+    if (!r.ok) throw new Error(r.status === 403 ? 'You do not have permission to view AI settings.' : `HTTP ${r.status}`);
+    aicState = await r.json();
+  } catch (e) {
+    aicSay('err', `Could not load AI settings — ${e.message}`);
+    return;
+  }
+
+  $('aic-provider').innerHTML = aicState.providers
+    .map(p => `<option value="${p.id}"${p.id === aicState.provider ? ' selected' : ''}>${p.label}</option>`).join('');
+  $('aic-model').value = aicState.model || '';
+  $('aic-baseurl').value = aicState.baseUrl || '';
+  $('aic-maxtokens').value = aicState.maxTokens || 8000;
+  $('aic-key').value = '';
+  aicOnProviderChange(true);
+  aicRenderStatus();
+  aicLoadDbStatus();
+
+  const active = aicMeta(aicState.provider);
+  $('aic-active-pill').className = 'pill ' + (aicState.configured[aicState.provider]?.hasKey ? 'pill-ok' : 'pill-warn');
+  $('aic-active-pill').textContent = `${active?.label || aicState.provider} · ${aicState.model || 'no model'}`;
+}
+
+function aicOnProviderChange(initial) {
+  const meta = aicMeta();
+  const id = aicProvider();
+  $('aic-baseurl-wrap').style.display = meta?.needsBaseUrl ? 'block' : 'none';
+
+  const cfg = aicState?.configured?.[id];
+  $('aic-key-state').innerHTML = cfg?.hasKey
+    ? `A key is saved for this provider (<span class="mono">${cfg.preview}</span>). Leave blank to keep it.`
+    : 'No key saved for this provider yet.';
+  $('aic-key').placeholder = meta?.keyPlaceholder || 'paste key';
+  $('aic-key-help').innerHTML = meta?.keyUrl
+    ? `Create a key at <a href="${meta.keyUrl}" target="_blank" rel="noreferrer" style="color:var(--accent);font-weight:600">${meta.keyUrl.replace(/^https?:\/\//, '')}</a>`
+    : 'Use whatever key your endpoint expects.';
+
+  // Switching provider invalidates the old model name — offer this one's default.
+  if (!initial) $('aic-model').value = meta?.defaultModel || '';
+  aicFillModelSelect(meta?.models || [], 'Built-in suggestions — press Refresh to load what this key can actually use.');
+  $('aic-result').style.display = 'none';
+
+  // A saved key means we can show the real list instead of guesses.
+  if (aicState?.configured?.[id]?.hasKey) aicFetchModels({ quiet: true });
+}
+
+/**
+ * Fills the dropdown and keeps the free-text box in sync. The current model is
+ * always present as an option even when the provider does not list it — a
+ * dropdown that silently drops the configured value would make it look unset.
+ */
+function aicFillModelSelect(models, note) {
+  const sel = $('aic-model-select');
+  const current = $('aic-model').value.trim();
+  const list = [...new Set([...(current ? [current] : []), ...models])];
+  sel.innerHTML = list.map(m => `<option value="${m}"${m === current ? ' selected' : ''}>${m}</option>`).join('')
+    + '<option value="__custom__">Other — type it manually…</option>';
+  if (!current && list.length) { sel.value = list[0]; $('aic-model').value = list[0]; }
+  $('aic-model').style.display = 'none';
+  if (note) $('aic-model-note').textContent = note;
+}
+
+function aicOnModelPick() {
+  const sel = $('aic-model-select');
+  if (sel.value === '__custom__') {
+    $('aic-model').style.display = 'block';
+    $('aic-model').value = '';
+    $('aic-model').focus();
+    $('aic-model-note').textContent = 'Type the exact model id your provider expects.';
+  } else {
+    $('aic-model').style.display = 'none';
+    $('aic-model').value = sel.value;
+  }
+}
+
+function aicToggleKeyVisibility() {
+  const f = $('aic-key');
+  const showing = f.type === 'text';
+  f.type = showing ? 'password' : 'text';
+  $('aic-key-eye').className = showing ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+}
+
+function aicRenderStatus() {
+  $('aic-provider-status').innerHTML = aicState.providers.map(p => {
+    const c = aicState.configured[p.id] || {};
+    const isActive = p.id === aicState.provider;
+    return `<div class="setting-row">
+      <div style="flex:1">
+        <div class="setting-name">${p.label}${isActive ? ' <span class="pill pill-ok" style="margin-left:6px">in use</span>' : ''}</div>
+        <div class="setting-desc">${c.hasKey ? `key <span class="mono">${c.preview}</span>` : 'no key saved'}</div>
+      </div>
+      <span class="pill ${c.hasKey ? 'pill-ok' : 'pill-idle'}">${c.hasKey ? 'ready' : 'empty'}</span>
+    </div>`;
+  }).join('');
+}
+
+async function aicLoadDbStatus() {
+  const box = $('aic-db-status');
+  try {
+    const r = await fetch('/api/reports/stored/status');
+    const s = await r.json();
+    if (!s.enabled) {
+      box.innerHTML = `<div class="setting-row"><div style="flex:1"><div class="setting-name">Disabled</div><div class="setting-desc">${s.reason || 'No database configured.'}</div></div><span class="pill pill-idle">off</span></div>`;
+      return;
+    }
+    box.innerHTML = `
+      <div class="setting-row"><div style="flex:1"><div class="setting-name">PostgreSQL</div><div class="setting-desc mono">${s.host}</div></div><span class="pill ${s.ready ? 'pill-ok' : 'pill-fail'}">${s.ready ? 'connected' : 'unreachable'}</span></div>
+      <div class="setting-row"><div style="flex:1"><div class="setting-name">Stored reports</div><div class="setting-desc">${s.latest ? 'latest ' + new Date(s.latest).toLocaleString() : 'none yet'}</div></div><span class="pill pill-idle">${s.reportCount ?? 0}</span></div>
+      ${s.error ? `<div class="card-note" style="color:#991b1b">${s.error}</div>` : ''}`;
+  } catch (_) {
+    box.innerHTML = '<div class="card-note">Could not read report storage status.</div>';
+  }
+}
+
+function aicPayload() {
+  const p = { provider: aicProvider(), model: $('aic-model').value.trim(), maxTokens: Number($('aic-maxtokens').value) };
+  if (aicMeta()?.needsBaseUrl) p.baseUrl = $('aic-baseurl').value.trim();
+  const key = $('aic-key').value.trim();
+  if (key) p.apiKey = key;
+  return p;
+}
+
+async function aicSave() {
+  aicSay('info', 'Saving…');
+  try {
+    const r = await fetch('/api/ai-settings', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(aicPayload())
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    $('aic-key').value = '';
+    aicState = j.settings;
+    aicRenderStatus();
+    aicOnProviderChange(true);
+    $('aic-active-pill').className = 'pill pill-ok';
+    $('aic-active-pill').textContent = `${aicMeta(j.settings.provider)?.label} · ${j.settings.model}`;
+    aicSay('ok', `Saved. Reviews will now use <b>${aicMeta(j.settings.provider)?.label}</b> with <span class="mono">${j.settings.model}</span>.`);
+    logAudit('AI settings changed', `${j.settings.provider} / ${j.settings.model}`, 'ok');
+  } catch (e) {
+    aicSay('err', `Could not save — ${e.message}`);
+  }
+}
+
+async function aicTest() {
+  aicSay('info', 'Calling the provider…');
+  try {
+    const r = await fetch('/api/ai-settings/test', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(aicPayload())
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { hint: j.hint });
+    aicSay('ok', `Connection works — <span class="mono">${j.model}</span> replied in ${j.ms} ms.`);
+  } catch (e) {
+    aicSay('err', `${e.message}${e.hint ? `<div style="margin-top:7px;opacity:.9">${e.hint}</div>` : ''}`);
+  }
+}
+
+/** @param {{quiet?:boolean}} [opts] quiet = triggered automatically, not by the button */
+async function aicFetchModels(opts = {}) {
+  if (!opts.quiet) $('aic-model-note').textContent = 'Fetching models from the provider…';
+  try {
+    const r = await fetch('/api/ai-settings/models', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(aicPayload())
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    aicFillModelSelect(j.models, `${j.models.length} models available on this key.`);
+  } catch (e) {
+    // The built-in list still lets the user proceed, so this is a note, not an error.
+    aicFillModelSelect(aicMeta()?.models || [],
+      `Could not load the live list (${e.message}). Showing built-in suggestions.`);
+  }
+}
+
+async function aicClearKey() {
+  const meta = aicMeta();
+  if (!confirm(`Remove the stored API key for ${meta?.label || aicProvider()}?`)) return;
+  try {
+    const r = await fetch('/api/ai-settings', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: aicProvider(), clearKey: true })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    aicState = j.settings;
+    aicRenderStatus(); aicOnProviderChange(true);
+    aicSay('info', 'Key removed. Reviews with this provider will fail until a new key is saved.');
+  } catch (e) {
+    aicSay('err', `Could not remove the key — ${e.message}`);
+  }
+}
+
 (async () => {
   const signedIn = await loadIdentity();
   if (!signedIn) { window.location.href = '/login'; return; }

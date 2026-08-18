@@ -26,6 +26,11 @@ const fetch      = require('node-fetch');
 // name (dotenv otherwise silently keeps whatever the shell/system already has set).
 require('dotenv').config({ override: true });
 
+const { generateSonarHtml, generateSonarXml } = require('./lib/sonar-report');
+const { ReportStore }  = require('./lib/report-store');
+const { AiSettings }   = require('./lib/ai-settings');
+const aiProviders      = require('./lib/ai-providers');
+
 const app    = express();
 const server = http.createServer(app);
 
@@ -374,23 +379,36 @@ async function createGitHubIssue({ repoName, title, body }) {
 // ─── EMAIL ────────────────────────────────────────────────────────────────────
 let smtpWarned = false;
 
-async function sendEmail({ to, subject, html }) {
-  if (!process.env.SMTP_HOST || !to) return;
+/**
+ * @param {object}   opts
+ * @param {Array}    [opts.attachments]  nodemailer attachment objects
+ *        ({ filename, content, contentType }).
+ * @returns {Promise<{sent:boolean, reason?:string, error?:string}>} — callers
+ *          that want to report delivery status to the UI need this; the old
+ *          silent-return behaviour hid "SMTP_PASS empty" from everyone.
+ */
+async function sendEmail({ to, subject, html, attachments }) {
+  if (!process.env.SMTP_HOST || !to) {
+    return { sent: false, reason: !to ? 'No recipient configured (NOTIFY_EMAIL).' : 'SMTP_HOST is not set in .env.' };
+  }
 
   // Host set but credentials blank produces nodemailer's opaque
   // 'Missing credentials for "PLAIN"'. Say what is actually wrong, once.
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    // Declared out here on purpose: the console warning fires only once, but
+    // every caller still needs the reason string for its own error reporting.
+    const missing = [
+      !process.env.SMTP_USER ? 'SMTP_USER' : null,
+      !process.env.SMTP_PASS ? 'SMTP_PASS' : null
+    ].filter(Boolean).join(' and ');
+
     if (!smtpWarned) {
       smtpWarned = true;
-      const missing = [
-        !process.env.SMTP_USER ? 'SMTP_USER' : null,
-        !process.env.SMTP_PASS ? 'SMTP_PASS' : null
-      ].filter(Boolean).join(' and ');
       console.warn(`[Email] ⏭️  Skipping notifications — ${missing} is empty in .env.`);
       console.warn('[Email]     For Gmail this must be a 16-character App Password, not your account password:');
       console.warn('[Email]     Google Account → Security → 2-Step Verification → App passwords');
     }
-    return;
+    return { sent: false, reason: `${missing} is empty in .env. Gmail needs a 16-character App Password.` };
   }
 
   try {
@@ -398,9 +416,17 @@ async function sendEmail({ to, subject, html }) {
       host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT) || 587,
       secure: false, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
     });
-    await t.sendMail({ from: process.env.SMTP_USER, to, subject, html });
-    console.log(`[Email] ✅ ${subject}`);
-  } catch (e) { console.error('[Email] ❌', safeError(e)); }
+    const info = await t.sendMail({
+      from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+      to, subject, html,
+      ...(attachments && attachments.length ? { attachments } : {})
+    });
+    console.log(`[Email] ✅ ${subject}${attachments?.length ? ` (+${attachments.length} attachment)` : ''}`);
+    return { sent: true, messageId: info.messageId };
+  } catch (e) {
+    console.error('[Email] ❌', safeError(e));
+    return { sent: false, error: safeError(e) };
+  }
 }
 
 // ─── AI REVIEW REPORT GENERATOR ───────────────────────────────────────────────
@@ -432,20 +458,136 @@ async function fetchSonarReport(projectKey) {
   if (!SONAR_TOKEN) throw new Error('SONAR_TOKEN not configured');
   const auth = { 'Authorization': `Basic ${Buffer.from(SONAR_TOKEN + ':').toString('base64')}` };
 
-  const [iR, mR] = await Promise.all([
-    fetch(`${SONAR_URL}/api/issues/search?componentKeys=${encodeURIComponent(projectKey)}&resolved=false&ps=50`, { headers: auth }),
-    fetch(`${SONAR_URL}/api/measures/component?component=${encodeURIComponent(projectKey)}&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc,security_hotspots,reliability_rating,security_rating,sqale_rating`, { headers: auth })
-  ]);
+  // Sonar caps page size at 500 and the whole result set at 10 000. A single
+  // ps=50 call (what this used to do) silently truncated the report to the
+  // first 50 findings, so the HTML/XML disagreed with the totals above them.
+  const PAGE_SIZE = 500;
+  const MAX_ISSUES = 2000;
+  const collected = [];
+  let total = 0;
 
-  if (!iR.ok) throw new Error(`SonarQube issues API: ${iR.status} — is SonarQube running on ${SONAR_URL}?`);
+  for (let page = 1; ; page++) {
+    const r = await fetch(
+      `${SONAR_URL}/api/issues/search?componentKeys=${encodeURIComponent(projectKey)}&resolved=false&ps=${PAGE_SIZE}&p=${page}`,
+      { headers: auth });
+    if (!r.ok) throw new Error(`SonarQube issues API: ${r.status} — is SonarQube running on ${SONAR_URL}?`);
+    const body = await r.json();
+    total = body.total || 0;
+    const batch = body.issues || [];
+    collected.push(...batch);
+    if (batch.length < PAGE_SIZE || collected.length >= Math.min(total, MAX_ISSUES)) break;
+  }
+
+  const mR = await fetch(`${SONAR_URL}/api/measures/component?component=${encodeURIComponent(projectKey)}&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc,security_hotspots,reliability_rating,security_rating,sqale_rating`, { headers: auth });
   if (!mR.ok) throw new Error(`SonarQube measures API: ${mR.status}`);
 
-  const issues   = await iR.json();
   const measures = await mR.json();
   const metrics  = {};
   (measures.component?.measures || []).forEach(m => { metrics[m.metric] = m.value; });
 
-  return { projectKey, metrics, issues: issues.issues || [], totalIssues: issues.total || 0 };
+  return { projectKey, metrics, issues: collected, totalIssues: total };
+}
+
+/**
+ * Download filename, named after the branch that was scanned:
+ *   SonarQubeReport-main.html  ·  AIReport-feature_login.xml
+ *
+ * Branch names legally contain '/' and other characters that are invalid in a
+ * filename and dangerous in a Content-Disposition header, so everything
+ * outside [A-Za-z0-9._-] collapses to an underscore.
+ *
+ * @param {string} prefix  'SonarQubeReport' | 'AIReport'
+ * @param {string} branch  branch the scan ran against
+ * @param {string} format  'html' | 'xml'
+ */
+function reportFileName(prefix, branch, format) {
+  const safe = String(branch || 'unknown')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .slice(0, 60);
+  return `${prefix}-${safe}.${format}`;
+}
+
+/**
+ * SonarQube URL a *browser* can open. SONAR_URL is the agent's own view of the
+ * server (often http://localhost:9000, or a container DNS name) — putting that
+ * in an email gives the reader a dead link. Behind a public origin the working
+ * address is the agent's reverse proxy instead.
+ */
+function publicSonarUrl() {
+  const origin = PUBLIC_ORIGINS[0];
+  return origin ? `${origin.replace(/\/+$/, '')}${SONAR_PROXY_PATH}` : SONAR_URL;
+}
+
+/**
+ * Short covering email. The full detail travels as attachments — mail clients
+ * cap message size and truncate long bodies, so the body stays a summary and
+ * the attachments carry the report.
+ */
+function composeReportEmail({ review, sonarReport, repoName, branch, storedId, secretsCount }) {
+  const m = sonarReport.metrics || {};
+  const score = review.score ?? 0;
+  const scoreColor = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const cell = (label, value, color) => `<td align="center" style="padding:12px 6px;border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px">
+      <div style="font-size:22px;font-weight:700;color:${color};font-family:'Courier New',monospace">${value}</div>
+      <div style="font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">${label}</div></td>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f4f7fa;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.10)">
+  <tr><td style="background:linear-gradient(135deg,#E82276,#b8195c);padding:28px 30px;color:#fff">
+    <div style="font-size:21px;font-weight:700">Your SonarQube report is ready</div>
+    <div style="font-size:14px;opacity:.95;margin-top:4px">${repoName} &nbsp;•&nbsp; branch <strong>${branch}</strong></div>
+    <div style="font-size:11px;opacity:.85;margin-top:10px;letter-spacing:.5px">SONARQUBE AI AGENT &nbsp;·&nbsp; BUSINESSNEXT CDG</div>
+  </td></tr>
+
+  <tr><td style="padding:26px 30px 10px" align="center">
+    <div style="display:inline-block;width:96px;height:96px;line-height:96px;border-radius:50%;border:7px solid ${scoreColor};color:${scoreColor};font-size:32px;font-weight:700">${score}</div>
+    <div style="font-size:11px;color:#6b7280;font-weight:700;letter-spacing:.6px;margin-top:10px">OVERALL QUALITY SCORE</div>
+  </td></tr>
+
+  <tr><td style="padding:8px 30px 4px">
+    <table width="100%" cellpadding="0" cellspacing="5"><tr>
+      ${cell('Bugs', Number(m.bugs || 0), '#dc2626')}
+      ${cell('Vulnerabilities', Number(m.vulnerabilities || 0), '#f97316')}
+      ${cell('Code Smells', Number(m.code_smells || 0), '#3b82f6')}
+      ${cell('Lines', Number(m.ncloc || 0), '#1f2937')}
+    </tr></table>
+  </td></tr>
+
+  ${review.summary ? `<tr><td style="padding:18px 30px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px"><tr><td style="padding:15px 17px">
+      <div style="font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.6px;margin-bottom:6px">AI SUMMARY</div>
+      <div style="font-size:13px;line-height:1.65;color:#4c1d95">${String(review.summary).replace(/</g, '&lt;')}</div>
+    </td></tr></table></td></tr>` : ''}
+
+  ${secretsCount ? `<tr><td style="padding:16px 30px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px"><tr><td style="padding:14px 17px">
+      <div style="font-size:13px;font-weight:700;color:#b91c1c">🔐 ${secretsCount} possible hardcoded credential(s) flagged</div>
+      <div style="font-size:12px;color:#991b1b;margin-top:5px">Rotate anything real and move it to environment variables. Details are in the attached reports.</div>
+    </td></tr></table></td></tr>` : ''}
+
+  <tr><td style="padding:20px 30px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px"><tr><td style="padding:15px 17px">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:.6px;margin-bottom:8px">ATTACHED</div>
+      <div style="font-size:13px;color:#374151;line-height:1.9">
+        📄 <strong>SonarQube report (HTML)</strong> — open in any browser<br>
+        🧾 <strong>SonarQube report (XML)</strong> — for tooling and archiving<br>
+        🤖 <strong>AI review (HTML)</strong> — prioritised findings with suggested fixes
+      </div>
+    </td></tr></table>
+  </td></tr>
+
+  <tr><td style="padding:22px 30px 30px;border-top:1px solid #e5e7eb;margin-top:20px">
+    <div style="font-size:11px;color:#6b7280;line-height:1.8">
+      <div><strong style="color:#1f2937">Project:</strong> ${sonarReport.projectKey}</div>
+      ${storedId ? `<div><strong style="color:#1f2937">Stored in database as report #${storedId}</strong></div>` : ''}
+      <div><strong style="color:#1f2937">Generated:</strong> ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+      <div style="margin-top:10px"><a href="${publicSonarUrl()}/dashboard?id=${encodeURIComponent(sonarReport.projectKey)}" style="color:#E82276;font-weight:600;text-decoration:none">Open in SonarQube →</a></div>
+    </div>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
 // ─── SECRETS CLASSIFICATION & REDACTION ──────────────────────────────────────
@@ -645,6 +787,27 @@ function ensureAuthStore() {
 }
 
 let authStore = ensureAuthStore();
+
+/* ─── REPORT STORAGE & AI PROVIDER CONFIG ──────────────────────────────────
+   Both are optional at boot: a missing database or an unset provider key must
+   degrade to a warning, never stop the server from serving the dashboard.   */
+const reportStore = new ReportStore();
+reportStore.init().then(ok => {
+  if (!reportStore.enabled) {
+    console.log('[Reports] ⏭️  DB storage off — set SONARQUBE_DB_HOST in .env to persist reports.');
+  } else if (ok) {
+    console.log(`[Reports] ✅ Postgres storage ready (${reportStore.host})`);
+  } else {
+    console.warn(`[Reports] ⚠️  Cannot reach ${reportStore.host}: ${reportStore.lastError}`);
+  }
+});
+
+// The install secret is generated by ensureAuthStore() above, so reading it
+// lazily here is safe on both first and subsequent boots.
+const aiSettings = new AiSettings(DATA_DIR, () => authStore.secret);
+if (aiSettings.seedFromEnv()) {
+  console.log('[AI] Imported ANTHROPIC_API_KEY from .env into encrypted settings (one time).');
+}
 
 // ── Sessions: base64url(payload).hmac ───────────────────────────────────────
 function signSession(userId, ttlMs) {
@@ -1021,8 +1184,14 @@ io.on('connection', (socket) => {
     const log = msg => socket.emit('review-log', msg);
     log('🔎 Loading SonarQube findings...');
 
-    if (!ANTHROPIC_KEY) {
-      return socket.emit('review-result', { success: false, error: 'ANTHROPIC_API_KEY not set in .env' });
+    // The key now lives in AI Settings, not .env — check the active provider.
+    const preflight = aiSettings.active();
+    if (!preflight.apiKey) {
+      const label = aiProviders.PROVIDERS[preflight.provider]?.label || preflight.provider;
+      return socket.emit('review-result', {
+        success: false,
+        error: `No API key configured for ${label}.\n\nOpen AI Settings in the dashboard, pick a provider and paste its key — no .env edit or restart needed.`
+      });
     }
 
     try {
@@ -1034,10 +1203,19 @@ io.on('connection', (socket) => {
       // Compact, code-free payload for Claude — file/line/rule/message/type/severity only.
       // Sorted worst-first, capped, so we never ship an unbounded prompt.
       const severityRank = { BLOCKER: 0, CRITICAL: 1, MAJOR: 2, MINOR: 3, INFO: 4 };
+
+      /* How many findings to hand the model. Each one costs roughly 80 input
+         tokens once serialised, and providers meter input and output against
+         the same budget — Groq's free tier allows 8000 tokens per minute in
+         total, so a fixed 60 issues plus a large max_tokens is an instant 413.
+         Scale the list with the configured output budget and always keep the
+         highest-severity findings, which are the ones worth the tokens. */
+      const aiBudget  = aiSettings.active().maxTokens;
+      const issueCap  = Math.max(15, Math.min(60, Math.floor((aiBudget - 900) / 90)));
       const sonarIssues = sonarReport.issues
         .slice()
         .sort((a, b) => (severityRank[a.severity] ?? 9) - (severityRank[b.severity] ?? 9))
-        .slice(0, 60)
+        .slice(0, issueCap)
         .map(i => ({
           rule: i.rule,
           type: i.type,
@@ -1061,17 +1239,13 @@ io.on('connection', (socket) => {
         description: redactSecrets(i.message || 'Hardcoded credential detected by SonarQube.')
       }));
 
-      log('🧠 Calling Claude AI — analyzing SonarQube findings (no source code sent)...');
-      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type':      'application/json',
-          'x-api-key':         ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: AI_MODEL, max_tokens: 4000, temperature: 0.2,
-          system: `You are a senior code security and quality analyst. You will be given a JSON summary of SonarQube static-analysis findings for a repository — NOT source code, only issue metadata (rule, file, line, message, severity, type) and aggregate metrics. Analyze and prioritize these findings and return ONLY valid JSON (no markdown, no explanations):
+      // Provider, model and key all come from the dashboard's AI Settings —
+      // switching vendors must not require a .env edit or a restart.
+      const aiCfg = aiSettings.active();
+      const aiLabel = aiProviders.PROVIDERS[aiCfg.provider]?.label || aiCfg.provider;
+      log(`🧠 Calling ${aiLabel} (${aiCfg.model}) — analyzing SonarQube findings (no source code sent)...`);
+
+      const AI_SYSTEM = `You are a senior code security and quality analyst. You will be given a JSON summary of SonarQube static-analysis findings for a repository — NOT source code, only issue metadata (rule, file, line, message, severity, type) and aggregate metrics. Analyze and prioritize these findings and return ONLY valid JSON (no markdown, no explanations):
 
 {
   "summary": "Brief overall assessment based on the findings",
@@ -1099,8 +1273,9 @@ IMPORTANT:
 - Base every issue strictly on the provided Sonar findings — never fabricate file/line references.
 - Any finding whose rule starts with "secrets:" (already flagged for you in a separate list) MUST also appear in "issues" with category "secrets" and severity "critical".
 - Never output an actual secret/credential value — the input data never contains one, only rule/file/line/message.
-- Ratings should reflect the real proportion of BLOCKER/CRITICAL vs MINOR findings.`,
-          messages: [{ role: 'user', content: `Repository: ${repoName} • Branch: ${branch}
+- Ratings should reflect the real proportion of BLOCKER/CRITICAL vs MINOR findings.`;
+
+      const AI_USER = `Repository: ${repoName} • Branch: ${branch}
 Total lines of code (SonarQube ncloc): ${totalCodeLines}
 Total SonarQube issues: ${sonarReport.totalIssues}
 Metrics: bugs=${sonarReport.metrics.bugs || 0}, vulnerabilities=${sonarReport.metrics.vulnerabilities || 0}, code_smells=${sonarReport.metrics.code_smells || 0}, security_hotspots=${sonarReport.metrics.security_hotspots || 0}, reliability_rating=${sonarReport.metrics.reliability_rating || '—'}, security_rating=${sonarReport.metrics.security_rating || '—'}, sqale_rating=${sonarReport.metrics.sqale_rating || '—'}
@@ -1109,35 +1284,58 @@ Known hardcoded-credential findings (already detected by SonarQube's secrets rul
 ${JSON.stringify(secretIssues.map(s => ({ file: s.file, line: s.line, rule: s.rule, message: s.description })), null, 2)}
 
 Full SonarQube issue list (metadata only, no source code):
-${JSON.stringify(sonarIssues, null, 2)}` }]
-        })
-      });
+${JSON.stringify(sonarIssues, null, 2)}`;
 
-      const aiData = await aiRes.json();
-      if (!aiRes.ok || aiData.error) {
-        const apiErrMsg  = aiData.error?.message || `Anthropic API returned ${aiRes.status}`;
-        const apiErrType = aiData.error?.type || '';
+      let aiResult;
+      try {
+        aiResult = await aiProviders.chat({
+          provider: aiCfg.provider,
+          apiKey:   aiCfg.apiKey,
+          model:    aiCfg.model,
+          baseUrl:  aiCfg.baseUrl,
+          maxTokens: aiCfg.maxTokens,
+          system:   AI_SYSTEM,
+          user:     AI_USER
+        });
+      } catch (aiErr) {
+        // An account or key problem is not a scan failure. The SonarQube
+        // findings are complete and worth keeping, so still render and store
+        // the report — just without the AI commentary. Losing a perfectly good
+        // report because a billing check failed would be the wrong trade.
+        const hint = aiErr.hint || '';
+        log(`❌ ${aiLabel} call failed: ${aiErr.message}`);
+        if (hint) log(`💡 ${hint}`);
 
-        // Account-level problems are not scan failures — the SonarQube results
-        // are fine and already saved. Say what to actually do about it, so a
-        // billing or key issue doesn't read like a broken pipeline.
-        let hint = '';
-        if (/credit balance is too low/i.test(apiErrMsg)) {
-          hint = 'The API key is valid, but the Anthropic account has no credit. Add credits at https://console.anthropic.com/settings/billing — the SonarQube scan itself succeeded and its results are unaffected.';
-        } else if (apiErrType === 'authentication_error' || aiRes.status === 401) {
-          hint = 'ANTHROPIC_API_KEY was rejected. Check the key in .env at https://console.anthropic.com/settings/keys, then restart the agent.';
-        } else if (apiErrType === 'rate_limit_error' || aiRes.status === 429) {
-          hint = 'Anthropic rate limit hit. Wait a minute and run the review again — the scan results are already saved.';
+        let fallbackId = null;
+        try {
+          const meta = { repoName, branch, sonarUrl: publicSonarUrl(), generatedAt: new Date() };
+          const saved = await reportStore.save({
+            projectKey, repoName, branch,
+            totalIssues: sonarReport.totalIssues,
+            metrics:     sonarReport.metrics,
+            aiSummary:   null,
+            aiProvider:  `${aiCfg.provider}:failed`,
+            html: generateSonarHtml(sonarReport, meta),
+            xml:  generateSonarXml(sonarReport, meta)
+          });
+          if (saved) {
+            fallbackId = saved.id;
+            log(`💾 SonarQube report #${saved.id} still stored in PostgreSQL (HTML + XML, without the AI section)`);
+            socket.emit('report-stored', { id: saved.id, projectKey, repoName, branch, aiFailed: true });
+          }
+        } catch (storeErr) {
+          log(`⚠️ Could not store the SonarQube report: ${safeError(storeErr)}`);
         }
 
-        log(`❌ Claude AI call failed: ${apiErrMsg}`);
-        if (hint) log(`💡 ${hint}`);
         return socket.emit('review-result', {
           success: false,
-          error: `AI analysis failed: ${safeError({ message: apiErrMsg })}${hint ? `\n\n${hint}` : ''}`
+          provider: aiCfg.provider,
+          storedReportId: fallbackId,
+          error: `AI analysis failed (${aiLabel}): ${safeError({ message: aiErr.message })}${hint ? `\n\n${hint}` : ''}` +
+                 (fallbackId ? `\n\nThe SonarQube scan itself succeeded — report #${fallbackId} was still saved (HTML + XML) and is available under AI Reports → Stored reports.` : '')
         });
       }
-      const raw = aiData.content?.[0]?.text || '{}';
+      const raw = aiResult.text || '{}';
       let review;
       try {
         review = JSON.parse(raw.replace(/```json|```/g, '').trim());
@@ -1206,23 +1404,65 @@ ${JSON.stringify(sonarIssues, null, 2)}` }]
         review
       });
 
-      socket.emit('review-result', { success: true, branch, repoName, projectKey, review });
+      // ── Formatted reports: render, store, then notify ──────────────────────
+      const reportMeta = {
+        repoName, branch,
+        sonarUrl:  publicSonarUrl(),
+        aiSummary: review.summary || null,
+        generatedAt: new Date()
+      };
+      const sonarHtml = generateSonarHtml(sonarReport, reportMeta);
+      const sonarXml  = generateSonarXml(sonarReport, reportMeta);
 
-      // Single consolidated notification — the "Notify" step of the flow.
-      log('📧 Sending AI Review notification...');
+      let storedId = null;
+      if (reportStore.enabled) {
+        const saved = await reportStore.save({
+          projectKey, repoName, branch,
+          totalIssues: sonarReport.totalIssues,
+          metrics:     sonarReport.metrics,
+          aiSummary:   review.summary || null,
+          aiProvider:  `${aiCfg.provider}:${aiResult.model || aiCfg.model}`,
+          html: sonarHtml, xml: sonarXml
+        });
+        if (saved) {
+          storedId = saved.id;
+          log(`💾 Report #${saved.id} stored in PostgreSQL (${reportStore.host}) — HTML + XML`);
+          socket.emit('report-stored', { id: saved.id, projectKey, repoName, branch });
+        } else {
+          log(`⚠️ Could not store the report in PostgreSQL: ${reportStore.lastError || 'unknown error'}`);
+        }
+      }
+
+      // Emitted after storage so the payload can carry the report id — the UI
+      // renders its View / HTML / XML buttons straight from this one event.
+      socket.emit('review-result', {
+        success: true, branch, repoName, projectKey, review, storedReportId: storedId
+      });
+
+      // Notification is the last, least important step: the review is already
+      // emitted and the report already stored. Anything that goes wrong here
+      // gets logged and swallowed — failing the whole review because SMTP is
+      // misconfigured would throw away work that actually succeeded.
       try {
-        const reportHTML = generateAIReviewReport(review, repoName, branch);
+        log('📧 Sending report by email...');
         const score = review.score || 0;
         const scoreEmoji = secretIssues.length ? '🔐' : score >= 80 ? '🎉' : score >= 60 ? '⚠️' : '🚨';
-        await sendEmail({
+        const mail = await sendEmail({
           to: NOTIFY_EMAIL,
-          subject: `${scoreEmoji} AI Review (SonarQube-based) • ${repoName} (${branch}) • Score: ${score}/100${secretIssues.length ? ` • ${secretIssues.length} secret(s) found` : ''}`,
-          html: reportHTML
+          subject: `${scoreEmoji} SonarQube Report • ${repoName} (${branch}) • Score ${score}/100${secretIssues.length ? ` • ${secretIssues.length} secret(s)` : ''}`,
+          html: composeReportEmail({ review, sonarReport, repoName, branch, storedId, secretsCount: secretIssues.length }),
+          attachments: [
+            { filename: reportFileName('SonarQubeReport', branch, 'html'), content: sonarHtml, contentType: 'text/html; charset=utf-8' },
+            { filename: reportFileName('SonarQubeReport', branch, 'xml'),  content: sonarXml,  contentType: 'application/xml; charset=utf-8' },
+            { filename: reportFileName('AIReport', branch, 'html'), content: generateAIReviewReport(review, repoName, branch), contentType: 'text/html; charset=utf-8' }
+          ]
         });
-        log('✅ Notification sent');
-      } catch (emailErr) {
-        log(`⚠️ Email sending failed: ${safeError(emailErr)}`);
+        if (mail.sent) log(`✅ Email sent to ${NOTIFY_EMAIL} with HTML + XML attached`);
+        else log(`⚠️ Email not sent — ${mail.reason || mail.error}`);
+      } catch (mailErr) {
+        log(`⚠️ Email step failed: ${safeError(mailErr)}`);
       }
+      log(`✅ Done${storedId ? ` — report #${storedId} is under AI Reports → Stored reports` : ''}`);
     } catch (e) {
       log(`❌ ${safeError(e)}`);
       socket.emit('review-result', { success: false, error: safeError(e) });
@@ -1474,7 +1714,37 @@ sonar.token=${SONAR_TOKEN}`;
       await new Promise(r => setTimeout(r, 15000));
 
       const report = await fetchSonarReport(projectKey);
-      socket.emit('scan-complete', { success: true, branch, repoName, projectKey, report, languagesDetected });
+
+      // Render and store the report here too, not only after an AI review.
+      // A scan on its own is a complete result worth keeping — waiting for the
+      // review would mean no downloadable report whenever the AI step is
+      // skipped, out of credit, or misconfigured.
+      let scanReportId = null;
+      try {
+        const meta = { repoName, branch, sonarUrl: publicSonarUrl(), generatedAt: new Date() };
+        const saved = await reportStore.save({
+          projectKey, repoName, branch,
+          totalIssues: report.totalIssues,
+          metrics:     report.metrics,
+          aiSummary:   null,
+          aiProvider:  null,
+          html: generateSonarHtml(report, meta),
+          xml:  generateSonarXml(report, meta)
+        });
+        if (saved) {
+          scanReportId = saved.id;
+          log('success', `💾 Report #${saved.id} stored — HTML + XML ready to view or download`);
+        } else if (reportStore.enabled) {
+          log('info', `⚠️ Report not stored: ${reportStore.lastError || 'unknown error'}`);
+        }
+      } catch (storeErr) {
+        log('info', `⚠️ Report not stored: ${safeError(storeErr)}`);
+      }
+
+      socket.emit('scan-complete', {
+        success: true, branch, repoName, projectKey, report, languagesDetected,
+        reportId: scanReportId
+      });
       log('success', `✅ Scan complete — ${report.totalIssues} issues found`);
       log('info',    `📊 View: ${SONAR_URL}/dashboard?id=${encodeURIComponent(projectKey)}`);
       log('info',    `➡️  Next: run Level 1 (AI Review) — notification is sent once that finishes.`);
@@ -1629,12 +1899,119 @@ app.get('/api/config', (_, res) => res.json({
   // Integration status — booleans only, never the secrets themselves.
   githubConfigured: !!GITHUB_TOKEN,
   sonarConfigured:  !!SONAR_TOKEN,
-  aiConfigured:     !!ANTHROPIC_KEY,
-  smtpConfigured:   !!process.env.SMTP_HOST,
-  aiModel:          AI_MODEL,
+  aiConfigured:     !!aiSettings.active().apiKey,
+  smtpConfigured:   !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+  aiModel:          aiSettings.active().model,
+  aiProvider:       aiSettings.active().provider,
   notifyEmail:      NOTIFY_EMAIL,
-  smtpHost:         process.env.SMTP_HOST || ''
+  smtpHost:         process.env.SMTP_HOST || '',
+  reportDb:         { enabled: reportStore.enabled, host: reportStore.host || null }
 }));
+
+/* ─── AI PROVIDER SETTINGS ─────────────────────────────────────────────────
+   Keys are write-only over this API: they go in via PUT, and only a masked
+   preview ever comes back out. Reading them requires filesystem access to
+   data/, not an HTTP request.                                              */
+
+app.get('/api/ai-settings', requirePerm('settings.edit'), (_, res) => {
+  res.json(aiSettings.publicView());
+});
+
+app.put('/api/ai-settings', requirePerm('settings.edit'), (req, res) => {
+  try {
+    const { provider, model, baseUrl, apiKey, maxTokens, clearKey } = req.body || {};
+    aiSettings.update({ provider, model, baseUrl, apiKey, maxTokens, clearKey }, req.user?.username || null);
+    console.log(`[AI] Settings updated by ${req.user?.username || 'unknown'} → ${aiSettings.state.provider}/${aiSettings.state.model}`);
+    res.json({ ok: true, settings: aiSettings.publicView() });
+  } catch (e) {
+    res.status(400).json({ error: safeError(e) });
+  }
+});
+
+/** Live round-trip against the provider. Uses the supplied key if the user is
+    testing before saving, otherwise the stored one. */
+app.post('/api/ai-settings/test', requirePerm('settings.edit'), async (req, res) => {
+  const { provider, model, baseUrl, apiKey } = req.body || {};
+  const p = provider || aiSettings.state.provider;
+  try {
+    const result = await aiProviders.testConnection({
+      provider: p,
+      apiKey:   (apiKey && String(apiKey).trim()) || aiSettings.keyFor(p),
+      model:    model || aiSettings.state.model,
+      baseUrl:  baseUrl !== undefined ? baseUrl : aiSettings.state.baseUrl
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: safeError(e), hint: e.hint || '' });
+  }
+});
+
+/** Model list straight from the provider, so the dropdown isn't a stale array. */
+app.post('/api/ai-settings/models', requirePerm('settings.edit'), async (req, res) => {
+  const { provider, baseUrl, apiKey } = req.body || {};
+  const p = provider || aiSettings.state.provider;
+  try {
+    const models = await aiProviders.listModels({
+      provider: p,
+      apiKey:   (apiKey && String(apiKey).trim()) || aiSettings.keyFor(p),
+      baseUrl:  baseUrl !== undefined ? baseUrl : aiSettings.state.baseUrl
+    });
+    res.json({ ok: true, models });
+  } catch (e) {
+    // Not fatal — the UI falls back to the built-in suggestions.
+    res.status(400).json({ ok: false, error: safeError(e), hint: e.hint || '' });
+  }
+});
+
+/* ─── STORED REPORTS (PostgreSQL) ──────────────────────────────────────────*/
+
+app.get('/api/reports/stored', requirePerm('reports.view'), async (req, res) => {
+  if (!reportStore.enabled) {
+    return res.json({ enabled: false, reason: 'SONARQUBE_DB_HOST is not set in .env.', reports: [] });
+  }
+  const reports = await reportStore.list({
+    limit: req.query.limit, projectKey: req.query.projectKey || null
+  });
+  res.json({ enabled: true, host: reportStore.host, error: reportStore.lastError, reports });
+});
+
+app.get('/api/reports/stored/status', requirePerm('reports.view'), async (_, res) => {
+  res.json(await reportStore.status());
+});
+
+/**
+ * The AI review itself, rendered as HTML on demand from data/ai-reports.json.
+ * It is not in the reports table — that table holds the SonarQube report, and
+ * the AI review is a separate artefact with its own retention. Rendering on
+ * request keeps a single source of truth instead of storing the same review
+ * twice in two formats that can drift.
+ */
+app.get('/api/reports/ai/:projectKey.html', requirePerm('reports.view'), (req, res) => {
+  const entry = loadAiReports().find(r => r.projectKey === req.params.projectKey);
+  if (!entry) return res.status(404).json({ error: 'No AI review stored for that project key.' });
+
+  const html = generateAIReviewReport(entry.review || {}, entry.repoName || 'project', entry.branch || 'main');
+  res.type('html');
+  if (req.query.download) {
+    res.setHeader('Content-Disposition', `attachment; filename="${reportFileName('AIReport', entry.branch, 'html')}"`);
+  }
+  res.send(html);
+});
+
+app.get('/api/reports/stored/:id.:format(html|xml)', requirePerm('reports.view'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid report id' });
+
+  const row = await reportStore.body(id, req.params.format);
+  if (!row) return res.status(404).json({ error: 'Report not found, or it has no body in that format.' });
+
+  const name = reportFileName('SonarQubeReport', row.branch, req.params.format);
+
+  res.type(req.params.format === 'xml' ? 'application/xml' : 'text/html');
+  // ?download=1 saves the file; without it the HTML renders in the browser.
+  if (req.query.download) res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  res.send(row.body);
+});
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -1645,6 +2022,8 @@ server.listen(PORT, HOST, () => {
   console.log(`   GitHub  : ${GITHUB_USERNAME || '⚠️ NOT SET'}`);
   console.log(`   Sonar   : ${SONAR_URL}`);
   console.log(`   Repos   : ${REPO_BASE_PATH}`);
-  console.log(`   AI Key  : ${ANTHROPIC_KEY ? '✅ Set' : '⚠️ Not set'}`);
+  const ai = aiSettings.active();
+  console.log(`   AI      : ${ai.apiKey ? '✅' : '⚠️ no key'} ${aiProviders.PROVIDERS[ai.provider]?.label || ai.provider} · ${ai.model || 'no model'}`);
+  console.log(`   Reports : ${reportStore.enabled ? `PostgreSQL ${reportStore.host}` : '⚠️ DB storage off'}`);
   console.log(`   Email   : ${process.env.SMTP_HOST ? '✅ Set' : '⚠️ Not set'}\n`);
 });
